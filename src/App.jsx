@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 // ============================================================
 // Supabase 設定
@@ -577,7 +577,7 @@ function InputForm({ onAdd }) {
 // ============================================================
 function MuniList({ stats }) {
   const [filterPref, setFilterPref] = useState("");
-  const [showOnly, setShowOnly] = useState("all"); // all / done / undone
+  const [showOnly, setShowOnly] = useState("all");
 
   const rows = useMemo(() => {
     return MUNICIPALITIES_DATA
@@ -605,6 +605,16 @@ function MuniList({ stats }) {
       });
   }, [stats, filterPref, showOnly]);
 
+  function exportCSV() {
+    const headers = ["都道府県", "市区町村", "世帯数", "投函枚数", "カバー率(%)", "最終投函日", "担当アカウント", "状況"];
+    const csvRows = rows.map(m => [
+      m.prefecture, m.name, m.households, m.flyerCount,
+      m.coverage, m.lastDate || "", m.members || "", m.done ? "完了" : "未投函",
+    ]);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCSV(`市区町村一覧_${date}.csv`, headers, csvRows);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Filters */}
@@ -620,6 +630,10 @@ function MuniList({ stats }) {
             {l}
           </button>
         ))}
+        <button onClick={exportCSV}
+          style={{ background: "#16a34a", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          📥 CSV出力
+        </button>
         <div style={{ marginLeft: "auto", fontSize: 13, color: "#64748b", alignSelf: "center" }}>{rows.length}件表示</div>
       </div>
 
@@ -668,6 +682,21 @@ function MuniList({ stats }) {
 }
 
 // ============================================================
+// CSV Export ユーティリティ
+// ============================================================
+function downloadCSV(filename, headers, rows) {
+  const bom = "\uFEFF"; // Excel用BOM（文字化け防止）
+  const csv = bom + [headers, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
 // History
 // ============================================================
 function History({ records, onDelete }) {
@@ -687,6 +716,25 @@ function History({ records, onDelete }) {
     });
   }, [records, filterMember, filterPref]);
 
+  function exportCSV() {
+    const headers = ["投函日", "アカウント名", "都道府県", "市区町村", "世帯数", "投函枚数", "カバー率(%)", "備考"];
+    const rows = filtered.map(r => {
+      const muni = MUNICIPALITIES_DATA.find(m => m.id === r.municipalityId);
+      return [
+        r.postedDate,
+        r.memberName,
+        muni ? muni.prefecture : "",
+        muni ? muni.name : "",
+        muni ? muni.households : "",
+        r.flyerCount,
+        muni ? (r.flyerCount / muni.households * 100).toFixed(1) : "",
+        r.notes || "",
+      ];
+    });
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCSV(`投函履歴_${date}.csv`, headers, rows);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -697,9 +745,13 @@ function History({ records, onDelete }) {
         </select>
         <select value={filterMember} onChange={e => setFilterMember(e.target.value)}
           style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}>
-          <option value="">すべてのメンバー</option>
+          <option value="">すべてのアカウント</option>
           {members.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
+        <button onClick={exportCSV} disabled={filtered.length === 0}
+          style={{ background: "#16a34a", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: filtered.length === 0 ? 0.4 : 1 }}>
+          📥 CSV出力
+        </button>
         <div style={{ marginLeft: "auto", fontSize: 13, color: "#64748b", alignSelf: "center" }}>{filtered.length}件</div>
       </div>
 
