@@ -224,20 +224,6 @@ export default function PostingApp() {
     setLoading(false);
   }
 
-  async function addRecord(record) {
-    await supabase.from("posting_records").insert({
-      member_name: record.memberName,
-      municipality_id: record.municipalityId,
-      posted_date: record.postedDate,
-      flyer_count: record.flyerCount,
-      notes: record.notes,
-    });
-  }
-
-  async function deleteRecord(id) {
-    await supabase.from("posting_records").delete().eq("id", id);
-  }
-
   // Derived stats
   const stats = useMemo(() => {
     const totalMuni = MUNICIPALITIES_DATA.length;
@@ -280,6 +266,29 @@ export default function PostingApp() {
     return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap };
   }, [records]);
 
+  // トースト通知
+  const [toast, setToast] = useState(null); // { message, color }
+  function showToast(message, color = "#10b981") {
+    setToast({ message, color });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  async function addRecord(record) {
+    await supabase.from("posting_records").insert({
+      member_name: record.memberName,
+      municipality_id: record.municipalityId,
+      posted_date: record.postedDate,
+      flyer_count: record.flyerCount,
+      notes: record.notes,
+    });
+    showToast("✅ 記録しました！");
+  }
+
+  async function deleteRecord(id) {
+    await supabase.from("posting_records").delete().eq("id", id);
+    showToast("🗑️ 削除しました", "#ef4444");
+  }
+
   return (
     <div style={{ fontFamily: "'Noto Sans JP', sans-serif", minHeight: "100vh", background: "#0f172a", color: "#e2e8f0" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Oswald:wght@700&display=swap" rel="stylesheet" />
@@ -302,11 +311,26 @@ export default function PostingApp() {
         .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: #f59e0b; }
         .progress-bar-bg { background: #334155; border-radius: 999px; overflow: hidden; }
         .progress-bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @media (max-width: 640px) {
           .grid-2 { grid-template-columns: 1fr !important; }
           .grid-4 { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
+
+      {/* トースト通知 */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          background: toast.color, color: "white", padding: "14px 28px",
+          borderRadius: 12, fontWeight: 700, fontSize: 15, zIndex: 9999,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          animation: "slideIn 0.3s ease",
+          whiteSpace: "nowrap",
+        }}>
+          {toast.message}
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -468,7 +492,7 @@ function Dashboard({ stats }) {
 function InputForm({ onAdd }) {
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({ memberName: "", prefecture: "", municipalityId: "", postedDate: today, flyerCount: "", notes: "" });
-  const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const availableMunis = useMemo(() =>
     form.prefecture ? MUNICIPALITIES_DATA.filter(m => m.prefecture === form.prefecture) : [],
@@ -477,8 +501,6 @@ function InputForm({ onAdd }) {
   function set(key, val) {
     setForm(f => ({ ...f, [key]: val, ...(key === "prefecture" ? { municipalityId: "" } : {}) }));
   }
-
-  const [saving, setSaving] = useState(false);
 
   async function handleSubmit() {
     if (!form.memberName || !form.municipalityId || !form.postedDate || !form.flyerCount) {
@@ -495,8 +517,6 @@ function InputForm({ onAdd }) {
     });
     setSaving(false);
     setForm({ memberName: form.memberName, prefecture: form.prefecture, municipalityId: "", postedDate: today, flyerCount: "", notes: "" });
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 2500);
   }
 
   const selectedMuni = form.municipalityId ? MUNICIPALITIES_DATA.find(m => m.id === Number(form.municipalityId)) : null;
@@ -505,12 +525,6 @@ function InputForm({ onAdd }) {
     <div>
       <div className="card" style={{ padding: 24 }}>
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 20, color: "#f8fafc" }}>投函記録を追加</div>
-
-        {success && (
-          <div style={{ background: "#064e3b", border: "1px solid #10b981", borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: "#6ee7b7", fontWeight: 600, fontSize: 14 }}>
-            ✅ 記録を保存しました！
-          </div>
-        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="form-field">
