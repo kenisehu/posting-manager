@@ -72,6 +72,10 @@ const MUNICIPALITIES_DATA = [
   { id: 57, prefecture: "埼玉県", name: "八潮市", households: 34000 },
   { id: 58, prefecture: "埼玉県", name: "吉川市", households: 31000 },
   { id: 59, prefecture: "埼玉県", name: "伊奈町", households: 21000 },
+  { id: 160, prefecture: "埼玉県", name: "飯能市", households: 39000 },
+  { id: 161, prefecture: "埼玉県", name: "三芳町", households: 13000 },
+  { id: 162, prefecture: "埼玉県", name: "毛呂山町", households: 12000 },
+  { id: 163, prefecture: "埼玉県", name: "越生町", households: 5000 },
   // 栃木県
   { id: 60, prefecture: "栃木県", name: "宇都宮市", households: 250000 },
   { id: 61, prefecture: "栃木県", name: "小山市", households: 88000 },
@@ -97,6 +101,7 @@ const MUNICIPALITIES_DATA = [
   { id: 81, prefecture: "栃木県", name: "高根沢町", households: 11000 },
   { id: 82, prefecture: "栃木県", name: "那須町", households: 14000 },
   { id: 83, prefecture: "栃木県", name: "那珂川町", households: 7000 },
+  { id: 164, prefecture: "栃木県", name: "さくら市", households: 32000 },
   // 茨城県
   { id: 84, prefecture: "茨城県", name: "水戸市", households: 133000 },
   { id: 85, prefecture: "茨城県", name: "つくば市", households: 118000 },
@@ -139,6 +144,9 @@ const MUNICIPALITIES_DATA = [
   { id: 122, prefecture: "茨城県", name: "五霞町", households: 4000 },
   { id: 123, prefecture: "茨城県", name: "境町", households: 12000 },
   { id: 124, prefecture: "茨城県", name: "利根町", households: 7000 },
+  { id: 165, prefecture: "茨城県", name: "結城市", households: 26000 },
+  { id: 166, prefecture: "茨城県", name: "下妻市", households: 17000 },
+  { id: 167, prefecture: "茨城県", name: "かすみがうら市", households: 17000 },
   // 群馬県
   { id: 125, prefecture: "群馬県", name: "前橋市", households: 175000 },
   { id: 126, prefecture: "群馬県", name: "高崎市", households: 214000 },
