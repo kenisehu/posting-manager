@@ -468,12 +468,12 @@ export default function PostingApp() {
     showToast("🗑️ 削除しました", "#ef4444");
   }
 
-  // ① アカウント名統合：fromの全記録をtoに書き換え
+  // ① アカウント名統合：fromの全記録をtoに一括書き換え
   async function renameAccount(fromName, toName) {
-    const targets = records.filter(r => r.memberName === fromName);
-    for (const r of targets) {
-      await supabase.from("posting_records").update({ member_name: toName }).eq("id", r.id);
-    }
+    await supabase
+      .from("posting_records")
+      .update({ member_name: toName })
+      .eq("member_name", fromName);
     showToast(`✅ 「${fromName}」を「${toName}」に統合しました`);
   }
 
