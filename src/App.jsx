@@ -390,15 +390,29 @@ export default function PostingApp() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
 
-    // 開拓者ランキング：市区町村ごとに最初に投函したアカウントを特定
-    // recordsは新しい順なので、古い順に並び替えて最初の投函者を見つける
+    // 開拓者ランキング：市区町村ごとに「翌日まで」の登録を有効として最初の投函者を特定
+    // ルール：その市区町村の最初の投函日から翌日（+1日）23:59までに登録された記録のみ有効
     const sortedByDate = [...records].sort((a, b) => {
       if (a.postedDate !== b.postedDate) return a.postedDate < b.postedDate ? -1 : 1;
       return a.id < b.id ? -1 : 1;
     });
-    const pioneerMap = {}; // municipalityId → 最初の投函者名
+    // 市区町村ごとの最初の投函日を取得
+    const firstDateMap = {};
     for (const r of sortedByDate) {
-      if (!pioneerMap[r.municipalityId]) pioneerMap[r.municipalityId] = r.memberName;
+      if (!firstDateMap[r.municipalityId]) firstDateMap[r.municipalityId] = r.postedDate;
+    }
+    // 翌日までに登録されたものの中で最も古い記録の投函者を開拓者とする
+    const pioneerMap = {};
+    for (const r of sortedByDate) {
+      const firstDate = firstDateMap[r.municipalityId];
+      if (!firstDate) continue;
+      // 翌日の日付文字列を計算
+      const nextDay = new Date(firstDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDayStr = nextDay.toISOString().split("T")[0];
+      if (r.postedDate <= nextDayStr && !pioneerMap[r.municipalityId]) {
+        pioneerMap[r.municipalityId] = r.memberName;
+      }
     }
     const pioneerCountMap = {};
     for (const name of Object.values(pioneerMap)) {
@@ -452,6 +466,15 @@ export default function PostingApp() {
   async function deleteRecord(id) {
     await supabase.from("posting_records").delete().eq("id", id);
     showToast("🗑️ 削除しました", "#ef4444");
+  }
+
+  // ① アカウント名統合：fromの全記録をtoに書き換え
+  async function renameAccount(fromName, toName) {
+    const targets = records.filter(r => r.memberName === fromName);
+    for (const r of targets) {
+      await supabase.from("posting_records").update({ member_name: toName }).eq("id", r.id);
+    }
+    showToast(`✅ 「${fromName}」を「${toName}」に統合しました`);
   }
 
   return (
@@ -538,8 +561,8 @@ export default function PostingApp() {
           </div>
         ) : (
           <>
-            {tab === "home" && <Home stats={stats} onAdd={addRecord} />}
-            {tab === "ranking" && <Ranking stats={stats} />}
+            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} />}
+            {tab === "ranking" && <Ranking stats={stats} records={records} onRenameAccount={renameAccount} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
           </>
@@ -552,14 +575,15 @@ export default function PostingApp() {
 // ============================================================
 // Home (入力フォーム + ダッシュボード 縦並び)
 // ============================================================
-function Home({ stats, onAdd }) {
+function Home({ stats, onAdd, records }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
   );
+  const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} />
+      <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} allMembers={allMembers} />
       <Dashboard stats={stats} />
     </div>
   );
@@ -651,6 +675,7 @@ const RANK_CONFIGS = [
     color: "#10b981",
     unit: "市区町村",
     toLocale: false,
+    note: "※ 初投函日の翌日までに登録された記録のみ有効。それ以降に遡って登録された場合は開拓者と認定されません。",
   },
   {
     key: "conquest",
@@ -698,7 +723,7 @@ function RankCard({ config, data }) {
 
   return (
     <div className="card" style={{ padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: config.note ? 10 : 16 }}>
         <span style={{ fontSize: 22 }}>{config.icon}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
@@ -706,6 +731,11 @@ function RankCard({ config, data }) {
         </div>
         <div style={{ fontSize: 12, color: "#475569" }}>全{data.length}名</div>
       </div>
+      {config.note && (
+        <div style={{ background: "#0f172a", border: "1px solid #1e3a2e", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: "#6ee7b7", marginBottom: 14, lineHeight: 1.6 }}>
+          ⚠️ {config.note}
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {visible.map((m, i) => (
           <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -749,7 +779,7 @@ function RankCard({ config, data }) {
   );
 }
 
-function Ranking({ stats }) {
+function Ranking({ stats, records, onRenameAccount }) {
   const rankData = {
     flyer: stats.memberRanking,
     pioneer: stats.pioneerRanking,
@@ -757,8 +787,55 @@ function Ranking({ stats }) {
     activeDays: stats.activeDaysRanking,
   };
 
+  // ① アカウント名統合UI
+  const allNames = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
+  const [mergeFrom, setMergeFrom] = useState("");
+  const [mergeTo, setMergeTo] = useState("");
+  const [merging, setMerging] = useState(false);
+
+  async function handleMerge() {
+    if (!mergeFrom || !mergeTo || mergeFrom === mergeTo) return;
+    if (!window.confirm(`「${mergeFrom}」の全記録を「${mergeTo}」に統合します。よろしいですか？`)) return;
+    setMerging(true);
+    await onRenameAccount(mergeFrom, mergeTo);
+    setMergeFrom("");
+    setMergeTo("");
+    setMerging(false);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* ① アカウント統合パネル */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>🔗 アカウント名の統合</div>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>表記ゆれなどで分かれてしまったアカウントを1つに統合できます</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div className="form-field" style={{ flex: 1, minWidth: 140 }}>
+            <label>統合元（削除される名前）</label>
+            <select value={mergeFrom} onChange={e => setMergeFrom(e.target.value)}
+              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" }}>
+              <option value="">選択してください</option>
+              {allNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div style={{ color: "#475569", fontSize: 18, paddingBottom: 4 }}>→</div>
+          <div className="form-field" style={{ flex: 1, minWidth: 140 }}>
+            <label>統合先（残る名前）</label>
+            <select value={mergeTo} onChange={e => setMergeTo(e.target.value)}
+              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" }}>
+              <option value="">選択してください</option>
+              {allNames.filter(n => n !== mergeFrom).map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <button onClick={handleMerge} disabled={!mergeFrom || !mergeTo || merging}
+            style={{ background: mergeFrom && mergeTo ? "#f59e0b" : "#334155", color: mergeFrom && mergeTo ? "#1e293b" : "#64748b", border: "none", borderRadius: 8, padding: "9px 20px", fontWeight: 700, fontSize: 13, cursor: mergeFrom && mergeTo ? "pointer" : "default", whiteSpace: "nowrap" }}>
+            {merging ? "統合中…" : "統合する"}
+          </button>
+        </div>
+      </div>
+
+      {/* ランキング一覧 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
         {RANK_CONFIGS.map(config => (
           <RankCard key={config.key} config={config} data={rankData[config.key]} />
@@ -771,11 +848,18 @@ function Ranking({ stats }) {
 // ============================================================
 // Input Form
 // ============================================================
-function InputForm({ onAdd, postedMunicipalityIds }) {
+function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({ memberName: "", prefecture: "", municipalityId: "", postedDate: today, flyerCount: "", notes: "" });
   const [saving, setSaving] = useState(false);
-  const [suggestions, setSuggestions] = useState(null); // { postedName, neighbors: [] }
+  const [suggestions, setSuggestions] = useState(null);
+  const [showNameSuggest, setShowNameSuggest] = useState(false);
+
+  // ② 入力中のアカウント名でフィルタしたサジェスト候補
+  const nameCandidates = useMemo(() => {
+    if (!form.memberName.trim()) return allMembers;
+    return allMembers.filter(n => n.includes(form.memberName.trim()));
+  }, [form.memberName, allMembers]);
 
   const availableMunis = useMemo(() =>
     form.prefecture ? MUNICIPALITIES_DATA.filter(m => m.prefecture === form.prefecture) : [],
@@ -826,9 +910,34 @@ function InputForm({ onAdd, postedMunicipalityIds }) {
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 20, color: "#f8fafc" }}>投函記録を追加</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="form-field">
+          <div className="form-field" style={{ position: "relative" }}>
             <label>アカウント名 *</label>
-            <input placeholder="例：田中 太郎" value={form.memberName} onChange={e => set("memberName", e.target.value)} />
+            <input
+              placeholder="例：田中 太郎"
+              value={form.memberName}
+              onChange={e => { set("memberName", e.target.value); setShowNameSuggest(true); }}
+              onFocus={() => setShowNameSuggest(true)}
+              onBlur={() => setTimeout(() => setShowNameSuggest(false), 150)}
+              autoComplete="off"
+            />
+            {showNameSuggest && nameCandidates.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                background: "#1e293b", border: "1px solid #334155", borderRadius: 8,
+                marginTop: 4, maxHeight: 180, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              }}>
+                {nameCandidates.map(name => (
+                  <div key={name}
+                    onMouseDown={() => { set("memberName", name); setShowNameSuggest(false); }}
+                    style={{ padding: "10px 14px", cursor: "pointer", fontSize: 14, color: "#e2e8f0", borderBottom: "1px solid #334155" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#334155"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    {name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
