@@ -381,7 +381,7 @@ export default function PostingApp() {
       prefStats[pref] = { total: munis.length, done, households: hh, flyers };
     }
 
-    // Member ranking
+    // Member ranking（枚数）
     const memberMap = {};
     for (const r of records) {
       memberMap[r.memberName] = (memberMap[r.memberName] || 0) + r.flyerCount;
@@ -390,7 +390,45 @@ export default function PostingApp() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
 
-    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap };
+    // 開拓者ランキング：市区町村ごとに最初に投函したアカウントを特定
+    // recordsは新しい順なので、古い順に並び替えて最初の投函者を見つける
+    const sortedByDate = [...records].sort((a, b) => {
+      if (a.postedDate !== b.postedDate) return a.postedDate < b.postedDate ? -1 : 1;
+      return a.id < b.id ? -1 : 1;
+    });
+    const pioneerMap = {}; // municipalityId → 最初の投函者名
+    for (const r of sortedByDate) {
+      if (!pioneerMap[r.municipalityId]) pioneerMap[r.municipalityId] = r.memberName;
+    }
+    const pioneerCountMap = {};
+    for (const name of Object.values(pioneerMap)) {
+      pioneerCountMap[name] = (pioneerCountMap[name] || 0) + 1;
+    }
+    const pioneerRanking = Object.entries(pioneerCountMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    // 制覇市区町村数ランキング
+    const conquestMap = {};
+    for (const r of records) {
+      if (!conquestMap[r.memberName]) conquestMap[r.memberName] = new Set();
+      conquestMap[r.memberName].add(r.municipalityId);
+    }
+    const conquestRanking = Object.entries(conquestMap)
+      .sort((a, b) => b[1].size - a[1].size)
+      .map(([name, set]) => ({ name, count: set.size }));
+
+    // 活動日数ランキング
+    const activeDaysMap = {};
+    for (const r of records) {
+      if (!activeDaysMap[r.memberName]) activeDaysMap[r.memberName] = new Set();
+      activeDaysMap[r.memberName].add(r.postedDate);
+    }
+    const activeDaysRanking = Object.entries(activeDaysMap)
+      .sort((a, b) => b[1].size - a[1].size)
+      .map(([name, set]) => ({ name, count: set.size }));
+
+    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking };
   }, [records]);
 
   // トースト通知
@@ -475,6 +513,7 @@ export default function PostingApp() {
       <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", display: "flex", overflowX: "auto", padding: "0 16px" }}>
         {[
           { key: "home", label: "🏠 ホーム" },
+          { key: "ranking", label: "🏆 ランキング" },
           { key: "list", label: "📋 一覧" },
           { key: "history", label: "📅 履歴" },
         ].map(t => (
@@ -500,6 +539,7 @@ export default function PostingApp() {
         ) : (
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} />}
+            {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
           </>
@@ -579,33 +619,6 @@ function Dashboard({ stats }) {
         </div>
       </div>
 
-      {/* Member ranking */}
-      {stats.memberRanking.length > 0 && (
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 16, color: "#f8fafc" }}>🏆 アカウント別 投函枚数ランキング</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {stats.memberRanking.map((m, i) => (
-              <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13,
-                  background: i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2e" : "#334155",
-                  color: i < 3 ? "#1e293b" : "#64748b" }}>
-                  {i + 1}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>{m.name}</span>
-                    <span style={{ fontWeight: 700, color: "#f59e0b" }}>{m.count.toLocaleString()}枚</span>
-                  </div>
-                  <div className="progress-bar-bg" style={{ height: 4 }}>
-                    <div className="progress-bar-fill" style={{ width: `${(m.count / stats.memberRanking[0].count * 100).toFixed(0)}%`, background: "#f59e0b" }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {stats.totalFlyers === 0 && (
         <div className="card" style={{ padding: 40, textAlign: "center", color: "#475569" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
@@ -613,6 +626,121 @@ function Dashboard({ stats }) {
           <div style={{ fontSize: 13, marginTop: 6 }}>「✏️ 記録入力」から投函記録を追加してください</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// Ranking
+// ============================================================
+const RANK_CONFIGS = [
+  {
+    key: "flyer",
+    icon: "📮",
+    title: "投函枚数ランキング",
+    subtitle: "総投函枚数が多い順",
+    color: "#f59e0b",
+    unit: "枚",
+    toLocale: true,
+  },
+  {
+    key: "pioneer",
+    icon: "🏴",
+    title: "開拓者ランキング",
+    subtitle: "誰も行ってない市区町村に初めて投函した数",
+    color: "#10b981",
+    unit: "市区町村",
+    toLocale: false,
+  },
+  {
+    key: "conquest",
+    icon: "🏙️",
+    title: "制覇市区町村数ランキング",
+    subtitle: "投函した市区町村の数が多い順",
+    color: "#3b82f6",
+    unit: "市区町村",
+    toLocale: false,
+  },
+  {
+    key: "activeDays",
+    icon: "📅",
+    title: "活動日数ランキング",
+    subtitle: "実際に活動した日数が多い順",
+    color: "#ec4899",
+    unit: "日",
+    toLocale: false,
+  },
+];
+
+function RankCard({ config, data }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 22 }}>{config.icon}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
+            <div style={{ fontSize: 11, color: "#64748b" }}>{config.subtitle}</div>
+          </div>
+        </div>
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#475569", fontSize: 13 }}>まだデータがありません</div>
+      </div>
+    );
+  }
+  const max = data[0].count;
+  return (
+    <div className="card" style={{ padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 22 }}>{config.icon}</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
+          <div style={{ fontSize: 11, color: "#64748b" }}>{config.subtitle}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {data.map((m, i) => (
+          <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              minWidth: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 900, fontSize: i < 3 ? 14 : 12,
+              background: i === 0 ? config.color : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2e" : "#334155",
+              color: i < 3 ? "#1e293b" : "#64748b",
+            }}>
+              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
+                <span style={{ fontWeight: 700, color: config.color, fontSize: 13 }}>
+                  {config.toLocale ? m.count.toLocaleString() : m.count}{config.unit}
+                </span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 5 }}>
+                <div className="progress-bar-fill" style={{ width: `${(m.count / max * 100).toFixed(0)}%`, background: config.color }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Ranking({ stats }) {
+  const rankData = {
+    flyer: stats.memberRanking,
+    pioneer: stats.pioneerRanking,
+    conquest: stats.conquestRanking,
+    activeDays: stats.activeDaysRanking,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+        {RANK_CONFIGS.map(config => (
+          <RankCard key={config.key} config={config} data={rankData[config.key]} />
+        ))}
+      </div>
     </div>
   );
 }
