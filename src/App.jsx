@@ -585,6 +585,7 @@ export default function PostingApp() {
         {[
           { key: "home", label: "🏠 ホーム" },
           { key: "ranking", label: "🏆 ランキング" },
+          { key: "mybadges", label: "🎖️ マイバッジ" },
           { key: "list", label: "📋 一覧" },
           { key: "history", label: "📅 履歴" },
           { key: "settings", label: "⚙️ 設定" },
@@ -612,6 +613,7 @@ export default function PostingApp() {
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} />}
             {tab === "ranking" && <Ranking stats={stats} />}
+            {tab === "mybadges" && <MyBadges stats={stats} records={records} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
             {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
@@ -849,24 +851,213 @@ function Ranking({ stats }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* バッジ凡例 */}
-      <div className="card" style={{ padding: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>🎖️ バッジ一覧（名前の横に表示されます）</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {BADGE_DEFS.map(b => (
-            <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#0f172a", borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
-              <span>{b.icon}</span>
-              <span style={{ color: b.color, fontWeight: 700 }}>{b.label}</span>
-              <span style={{ color: "#475569" }}>｜{b.desc}</span>
-            </div>
-          ))}
-        </div>
-      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
         {RANK_CONFIGS.map(config => (
           <RankCard key={config.key} config={config} data={rankData[config.key]} memberBadges={stats.memberBadges} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MyBadges（マイバッジ）
+// ============================================================
+
+// カテゴリ別に次のバッジまでの進捗を計算
+const BADGE_NEXT_DEFS = [
+  {
+    category: "投函枚数",
+    icon: "📮",
+    color: "#f59e0b",
+    getValue: s => s.totalFlyers,
+    unit: "枚",
+    steps: [500, 1000, 3000, 5000, 10000, 30000],
+  },
+  {
+    category: "制覇市区町村数",
+    icon: "🏙️",
+    color: "#3b82f6",
+    getValue: s => s.conquest,
+    unit: "市区町村",
+    steps: [1, 5, 10, 20, 50],
+  },
+  {
+    category: "開拓者回数",
+    icon: "🏴",
+    color: "#10b981",
+    getValue: s => s.pioneer,
+    unit: "地域",
+    steps: [1, 3, 5, 10, 20],
+  },
+  {
+    category: "活動日数",
+    icon: "📅",
+    color: "#ec4899",
+    getValue: s => s.activeDays,
+    unit: "日",
+    steps: [3, 7, 14, 30, 60],
+  },
+];
+
+function MyBadges({ stats, records }) {
+  const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
+  const [selectedName, setSelectedName] = useState("");
+  const [showSuggest, setShowSuggest] = useState(false);
+
+  const nameCandidates = useMemo(() => {
+    if (!selectedName.trim()) return allMembers;
+    return allMembers.filter(n => n.includes(selectedName.trim()));
+  }, [selectedName, allMembers]);
+
+  // 選択アカウントの実績を計算
+  const memberStats = useMemo(() => {
+    if (!selectedName) return null;
+    const name = selectedName.trim();
+    const myRecords = records.filter(r => r.memberName === name);
+    if (myRecords.length === 0) return null;
+
+    const totalFlyers = myRecords.reduce((s, r) => s + r.flyerCount, 0);
+    const conquest = new Set(myRecords.map(r => r.municipalityId)).size;
+    const activeDays = new Set(myRecords.map(r => r.postedDate)).size;
+    const pioneer = stats.pioneerRanking.find(p => p.name === name)?.count || 0;
+    return { totalFlyers, conquest, activeDays, pioneer };
+  }, [selectedName, records, stats.pioneerRanking]);
+
+  const earnedBadges = memberStats ? calcBadges(memberStats) : [];
+  const notEarnedBadges = memberStats ? BADGE_DEFS.filter(b => !b.check(memberStats)) : [];
+
+  return (
+    <div style={{ maxWidth: 700, display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* アカウント選択 */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🎖️ アカウントを選択してください</div>
+        <div style={{ position: "relative" }}>
+          <input
+            placeholder="アカウント名を入力または選択..."
+            value={selectedName}
+            onChange={e => { setSelectedName(e.target.value); setShowSuggest(true); }}
+            onFocus={() => setShowSuggest(true)}
+            onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+            autoComplete="off"
+            style={{ width: "100%", background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, outline: "none" }}
+          />
+          {showSuggest && nameCandidates.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+              {nameCandidates.map(name => (
+                <div key={name} onMouseDown={() => { setSelectedName(name); setShowSuggest(false); }}
+                  style={{ padding: "10px 14px", cursor: "pointer", fontSize: 14, color: "#e2e8f0", borderBottom: "1px solid #1e293b" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#334155"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  {name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {selectedName && !memberStats && (
+        <div className="card" style={{ padding: 32, textAlign: "center", color: "#475569" }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+          <div>「{selectedName}」の記録が見つかりません</div>
+        </div>
+      )}
+
+      {memberStats && (
+        <>
+          {/* 獲得済みバッジ */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>
+              ✨ 獲得済みバッジ
+              <span style={{ marginLeft: 8, fontSize: 13, color: "#f59e0b", fontWeight: 900 }}>{earnedBadges.length}</span>
+              <span style={{ fontSize: 12, color: "#475569", fontWeight: 400 }}>/{BADGE_DEFS.length}個</span>
+            </div>
+            {earnedBadges.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#475569", marginTop: 12 }}>まだバッジがありません。活動を続けよう！</div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+                {earnedBadges.map(b => (
+                  <div key={b.id} style={{ background: "#0f172a", border: `1px solid ${b.color}44`, borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90 }}>
+                    <div style={{ fontSize: 26, marginBottom: 4 }}>{b.icon}</div>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: b.color }}>{b.label}</div>
+                    <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{b.desc}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 次のバッジまでの進捗 */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 16 }}>🎯 次のバッジまであと…</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {BADGE_NEXT_DEFS.map(cat => {
+                const current = cat.getValue(memberStats);
+                const nextStep = cat.steps.find(s => s > current);
+                const prevStep = [...cat.steps].reverse().find(s => s <= current) || 0;
+                if (!nextStep) return (
+                  <div key={cat.category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>{cat.icon}</span>
+                    <div>
+                      <span style={{ fontWeight: 700, color: cat.color }}>{cat.category}</span>
+                      <span style={{ fontSize: 12, color: "#10b981", marginLeft: 8 }}>🏆 全バッジ獲得済み！</span>
+                    </div>
+                  </div>
+                );
+                const progress = ((current - prevStep) / (nextStep - prevStep) * 100).toFixed(0);
+                const remaining = nextStep - current;
+                // 次のバッジ名を探す
+                const nextBadge = BADGE_DEFS.find(b => {
+                  const val = cat.getValue(memberStats);
+                  return !b.check(memberStats) && b.check({ ...memberStats, [Object.keys(memberStats).find(k => cat.getValue({...memberStats, [k]: nextStep}) === nextStep)]: nextStep });
+                });
+                // カテゴリと対応するバッジを直接マッピング
+                const catBadges = BADGE_DEFS.filter(b => b.check({ totalFlyers: cat.category === "投函枚数" ? nextStep : 0, conquest: cat.category === "制覇市区町村数" ? nextStep : 0, pioneer: cat.category === "開拓者回数" ? nextStep : 0, activeDays: cat.category === "活動日数" ? nextStep : 0 }));
+                const targetBadge = catBadges[catBadges.length - 1];
+                return (
+                  <div key={cat.category}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 18 }}>{cat.icon}</span>
+                        <span style={{ fontWeight: 600, color: "#f8fafc", fontSize: 13 }}>{cat.category}</span>
+                        {targetBadge && <span style={{ fontSize: 14 }}>{targetBadge.icon}</span>}
+                        {targetBadge && <span style={{ fontSize: 12, color: cat.color, fontWeight: 700 }}>{targetBadge.label}</span>}
+                      </div>
+                      <span style={{ fontSize: 13, color: "#94a3b8" }}>
+                        <strong style={{ color: cat.color }}>{current.toLocaleString()}</strong> / {nextStep.toLocaleString()}{cat.unit}
+                      </span>
+                    </div>
+                    <div className="progress-bar-bg" style={{ height: 8 }}>
+                      <div className="progress-bar-fill" style={{ width: `${progress}%`, background: cat.color }} />
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                      あと <strong style={{ color: "#f8fafc" }}>{remaining.toLocaleString()}{cat.unit}</strong> で「{targetBadge?.label}」獲得！
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 未獲得バッジ */}
+          {notEarnedBadges.length > 0 && (
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#475569", marginBottom: 14 }}>🔒 未獲得バッジ</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {notEarnedBadges.map(b => (
+                  <div key={b.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90, opacity: 0.5 }}>
+                    <div style={{ fontSize: 26, marginBottom: 4, filter: "grayscale(1)" }}>{b.icon}</div>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: "#475569" }}>{b.label}</div>
+                    <div style={{ fontSize: 10, color: "#334155", marginTop: 2 }}>{b.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
