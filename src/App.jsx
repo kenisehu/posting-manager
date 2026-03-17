@@ -672,7 +672,11 @@ const RANK_CONFIGS = [
   },
 ];
 
+const TOP_N = 10;
+
 function RankCard({ config, data }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (!data || data.length === 0) {
     return (
       <div className="card" style={{ padding: 24 }}>
@@ -687,18 +691,23 @@ function RankCard({ config, data }) {
       </div>
     );
   }
+
   const max = data[0].count;
+  const visible = showAll ? data : data.slice(0, TOP_N);
+  const hidden = data.length - TOP_N;
+
   return (
     <div className="card" style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <span style={{ fontSize: 22 }}>{config.icon}</span>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
           <div style={{ fontSize: 11, color: "#64748b" }}>{config.subtitle}</div>
         </div>
+        <div style={{ fontSize: 12, color: "#475569" }}>全{data.length}名</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {data.map((m, i) => (
+        {visible.map((m, i) => (
           <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               minWidth: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -722,6 +731,20 @@ function RankCard({ config, data }) {
           </div>
         ))}
       </div>
+
+      {/* もっと見る / 折りたたむ */}
+      {data.length > TOP_N && (
+        <button onClick={() => setShowAll(v => !v)} style={{
+          marginTop: 14, width: "100%", background: "#0f172a", border: "1px solid #334155",
+          borderRadius: 8, padding: "9px 0", color: "#94a3b8", fontSize: 13, fontWeight: 600,
+          cursor: "pointer", transition: "all 0.2s",
+        }}
+          onMouseEnter={e => e.target.style.borderColor = config.color}
+          onMouseLeave={e => e.target.style.borderColor = "#334155"}
+        >
+          {showAll ? "▲ 折りたたむ" : `▼ もっと見る（残り${hidden}名）`}
+        </button>
+      )}
     </div>
   );
 }
