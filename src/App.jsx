@@ -314,6 +314,42 @@ const NEIGHBORS = {
 };
 
 // ============================================================
+// バッジ定義
+// ============================================================
+const BADGE_DEFS = [
+  // 投函枚数
+  { id: "flyer_500",    icon: "📬", label: "ポスター見習い",   desc: "累計500枚投函",     color: "#94a3b8", check: s => s.totalFlyers >= 500 },
+  { id: "flyer_1000",   icon: "📮", label: "配達人",           desc: "累計1,000枚投函",   color: "#f59e0b", check: s => s.totalFlyers >= 1000 },
+  { id: "flyer_3000",   icon: "📦", label: "ポスタリスト",     desc: "累計3,000枚投函",   color: "#f59e0b", check: s => s.totalFlyers >= 3000 },
+  { id: "flyer_5000",   icon: "🚀", label: "投函マシーン",     desc: "累計5,000枚投函",   color: "#10b981", check: s => s.totalFlyers >= 5000 },
+  { id: "flyer_10000",  icon: "🌟", label: "レジェンド配達人", desc: "累計10,000枚投函",  color: "#ec4899", check: s => s.totalFlyers >= 10000 },
+  { id: "flyer_30000",  icon: "👑", label: "投函王",           desc: "累計30,000枚投函",  color: "#f59e0b", check: s => s.totalFlyers >= 30000 },
+  // 制覇市区町村数
+  { id: "conq_1",   icon: "🏁", label: "第一歩",         desc: "1市区町村制覇",    color: "#94a3b8", check: s => s.conquest >= 1 },
+  { id: "conq_5",   icon: "🗺️", label: "エリア探検家",   desc: "5市区町村制覇",    color: "#f59e0b", check: s => s.conquest >= 5 },
+  { id: "conq_10",  icon: "🏙️", label: "タウンマスター", desc: "10市区町村制覇",   color: "#10b981", check: s => s.conquest >= 10 },
+  { id: "conq_20",  icon: "🌆", label: "シティハンター",  desc: "20市区町村制覇",   color: "#3b82f6", check: s => s.conquest >= 20 },
+  { id: "conq_50",  icon: "🗾", label: "北関東の覇者",    desc: "50市区町村制覇",   color: "#ec4899", check: s => s.conquest >= 50 },
+  // 開拓者回数
+  { id: "pioneer_1",  icon: "🏴", label: "開拓者",         desc: "初めて新地域を開拓",  color: "#94a3b8", check: s => s.pioneer >= 1 },
+  { id: "pioneer_3",  icon: "⛺", label: "フロンティア",   desc: "3地域を開拓",         color: "#f59e0b", check: s => s.pioneer >= 3 },
+  { id: "pioneer_5",  icon: "🧭", label: "探検家",         desc: "5地域を開拓",         color: "#10b981", check: s => s.pioneer >= 5 },
+  { id: "pioneer_10", icon: "🌍", label: "大航海時代",     desc: "10地域を開拓",        color: "#3b82f6", check: s => s.pioneer >= 10 },
+  { id: "pioneer_20", icon: "🚩", label: "伝説の開拓者",   desc: "20地域を開拓",        color: "#ec4899", check: s => s.pioneer >= 20 },
+  // 活動日数
+  { id: "days_3",   icon: "🌱", label: "新人",         desc: "3日間活動",   color: "#94a3b8", check: s => s.activeDays >= 3 },
+  { id: "days_7",   icon: "🔥", label: "週間戦士",     desc: "7日間活動",   color: "#f59e0b", check: s => s.activeDays >= 7 },
+  { id: "days_14",  icon: "💪", label: "ハードワーカー", desc: "14日間活動", color: "#10b981", check: s => s.activeDays >= 14 },
+  { id: "days_30",  icon: "🏅", label: "月間MVP",      desc: "30日間活動",  color: "#3b82f6", check: s => s.activeDays >= 30 },
+  { id: "days_60",  icon: "🦁", label: "不屈の闘士",   desc: "60日間活動",  color: "#ec4899", check: s => s.activeDays >= 60 },
+];
+
+// アカウントの実績からバッジ一覧を返す
+function calcBadges(memberStats) {
+  return BADGE_DEFS.filter(b => b.check(memberStats));
+}
+
+// ============================================================
 // Main App
 // ============================================================
 export default function PostingApp() {
@@ -442,7 +478,19 @@ export default function PostingApp() {
       .sort((a, b) => b[1].size - a[1].size)
       .map(([name, set]) => ({ name, count: set.size }));
 
-    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking };
+    // メンバーごとのバッジ計算
+    const allMemberNames = [...new Set(records.map(r => r.memberName))];
+    const memberBadges = {};
+    for (const name of allMemberNames) {
+      memberBadges[name] = calcBadges({
+        totalFlyers: memberMap[name] || 0,
+        conquest: conquestMap[name]?.size || 0,
+        pioneer: pioneerCountMap[name] || 0,
+        activeDays: activeDaysMap[name]?.size || 0,
+      });
+    }
+
+    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking, memberBadges };
   }, [records]);
 
   // トースト通知
@@ -539,6 +587,7 @@ export default function PostingApp() {
           { key: "ranking", label: "🏆 ランキング" },
           { key: "list", label: "📋 一覧" },
           { key: "history", label: "📅 履歴" },
+          { key: "settings", label: "⚙️ 設定" },
         ].map(t => (
           <button key={t.key} className="tab-btn" onClick={() => setTab(t.key)}
             style={{
@@ -562,9 +611,10 @@ export default function PostingApp() {
         ) : (
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} />}
-            {tab === "ranking" && <Ranking stats={stats} records={records} onRenameAccount={renameAccount} />}
+            {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
+            {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
           </>
         )}
       </div>
@@ -699,7 +749,7 @@ const RANK_CONFIGS = [
 
 const TOP_N = 10;
 
-function RankCard({ config, data }) {
+function RankCard({ config, data, memberBadges }) {
   const [showAll, setShowAll] = useState(false);
 
   if (!data || data.length === 0) {
@@ -737,29 +787,39 @@ function RankCard({ config, data }) {
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {visible.map((m, i) => (
-          <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              minWidth: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 900, fontSize: i < 3 ? 14 : 12,
-              background: i === 0 ? config.color : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2e" : "#334155",
-              color: i < 3 ? "#1e293b" : "#64748b",
-            }}>
-              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
-                <span style={{ fontWeight: 700, color: config.color, fontSize: 13 }}>
-                  {config.toLocale ? m.count.toLocaleString() : m.count}{config.unit}
-                </span>
+        {visible.map((m, i) => {
+          const badges = memberBadges?.[m.name] || [];
+          return (
+            <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                minWidth: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 900, fontSize: i < 3 ? 14 : 12,
+                background: i === 0 ? config.color : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2e" : "#334155",
+                color: i < 3 ? "#1e293b" : "#64748b",
+              }}>
+                {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
               </div>
-              <div className="progress-bar-bg" style={{ height: 5 }}>
-                <div className="progress-bar-fill" style={{ width: `${(m.count / max * 100).toFixed(0)}%`, background: config.color }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
+                    {badges.map(b => (
+                      <span key={b.id} title={`${b.label}：${b.desc}`} style={{
+                        fontSize: 15, cursor: "default", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))"
+                      }}>{b.icon}</span>
+                    ))}
+                  </div>
+                  <span style={{ fontWeight: 700, color: config.color, fontSize: 13, whiteSpace: "nowrap", marginLeft: 6 }}>
+                    {config.toLocale ? m.count.toLocaleString() : m.count}{config.unit}
+                  </span>
+                </div>
+                <div className="progress-bar-bg" style={{ height: 5 }}>
+                  <div className="progress-bar-fill" style={{ width: `${(m.count / max * 100).toFixed(0)}%`, background: config.color }} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* もっと見る / 折りたたむ */}
@@ -779,7 +839,7 @@ function RankCard({ config, data }) {
   );
 }
 
-function Ranking({ stats, records, onRenameAccount }) {
+function Ranking({ stats }) {
   const rankData = {
     flyer: stats.memberRanking,
     pioneer: stats.pioneerRanking,
@@ -787,58 +847,24 @@ function Ranking({ stats, records, onRenameAccount }) {
     activeDays: stats.activeDaysRanking,
   };
 
-  // ① アカウント名統合UI
-  const allNames = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
-  const [mergeFrom, setMergeFrom] = useState("");
-  const [mergeTo, setMergeTo] = useState("");
-  const [merging, setMerging] = useState(false);
-
-  async function handleMerge() {
-    if (!mergeFrom || !mergeTo || mergeFrom === mergeTo) return;
-    if (!window.confirm(`「${mergeFrom}」の全記録を「${mergeTo}」に統合します。よろしいですか？`)) return;
-    setMerging(true);
-    await onRenameAccount(mergeFrom, mergeTo);
-    setMergeFrom("");
-    setMergeTo("");
-    setMerging(false);
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-      {/* ① アカウント統合パネル */}
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>🔗 アカウント名の統合</div>
-        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>表記ゆれなどで分かれてしまったアカウントを1つに統合できます</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div className="form-field" style={{ flex: 1, minWidth: 140 }}>
-            <label>統合元（削除される名前）</label>
-            <select value={mergeFrom} onChange={e => setMergeFrom(e.target.value)}
-              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" }}>
-              <option value="">選択してください</option>
-              {allNames.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div style={{ color: "#475569", fontSize: 18, paddingBottom: 4 }}>→</div>
-          <div className="form-field" style={{ flex: 1, minWidth: 140 }}>
-            <label>統合先（残る名前）</label>
-            <select value={mergeTo} onChange={e => setMergeTo(e.target.value)}
-              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" }}>
-              <option value="">選択してください</option>
-              {allNames.filter(n => n !== mergeFrom).map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <button onClick={handleMerge} disabled={!mergeFrom || !mergeTo || merging}
-            style={{ background: mergeFrom && mergeTo ? "#f59e0b" : "#334155", color: mergeFrom && mergeTo ? "#1e293b" : "#64748b", border: "none", borderRadius: 8, padding: "9px 20px", fontWeight: 700, fontSize: 13, cursor: mergeFrom && mergeTo ? "pointer" : "default", whiteSpace: "nowrap" }}>
-            {merging ? "統合中…" : "統合する"}
-          </button>
+      {/* バッジ凡例 */}
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>🎖️ バッジ一覧（名前の横に表示されます）</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {BADGE_DEFS.map(b => (
+            <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#0f172a", borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
+              <span>{b.icon}</span>
+              <span style={{ color: b.color, fontWeight: 700 }}>{b.label}</span>
+              <span style={{ color: "#475569" }}>｜{b.desc}</span>
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* ランキング一覧 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
         {RANK_CONFIGS.map(config => (
-          <RankCard key={config.key} config={config} data={rankData[config.key]} />
+          <RankCard key={config.key} config={config} data={rankData[config.key]} memberBadges={stats.memberBadges} />
         ))}
       </div>
     </div>
@@ -1024,6 +1050,63 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// Settings
+// ============================================================
+function Settings({ records, onRenameAccount }) {
+  const allNames = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
+  const [mergeFrom, setMergeFrom] = useState("");
+  const [mergeTo, setMergeTo] = useState("");
+  const [merging, setMerging] = useState(false);
+
+  async function handleMerge() {
+    if (!mergeFrom || !mergeTo || mergeFrom === mergeTo) return;
+    if (!window.confirm(`「${mergeFrom}」の全記録を「${mergeTo}」に統合します。よろしいですか？`)) return;
+    setMerging(true);
+    await onRenameAccount(mergeFrom, mergeTo);
+    setMergeFrom("");
+    setMergeTo("");
+    setMerging(false);
+  }
+
+  return (
+    <div style={{ maxWidth: 560, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#f8fafc", marginBottom: 4 }}>🔗 アカウント名の統合</div>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>表記ゆれなどで分かれてしまったアカウントを1つに統合できます</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="form-field">
+            <label>統合元（削除される名前）</label>
+            <select value={mergeFrom} onChange={e => setMergeFrom(e.target.value)}
+              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, outline: "none" }}>
+              <option value="">選択してください</option>
+              {allNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div style={{ textAlign: "center", color: "#475569", fontSize: 20 }}>↓</div>
+          <div className="form-field">
+            <label>統合先（残る名前）</label>
+            <select value={mergeTo} onChange={e => setMergeTo(e.target.value)}
+              style={{ background: "#0f172a", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, outline: "none" }}>
+              <option value="">選択してください</option>
+              {allNames.filter(n => n !== mergeFrom).map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          {mergeFrom && mergeTo && (
+            <div style={{ background: "#0f172a", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#94a3b8" }}>
+              「<strong style={{ color: "#ef4444" }}>{mergeFrom}</strong>」の全記録が「<strong style={{ color: "#10b981" }}>{mergeTo}</strong>」に統合されます
+            </div>
+          )}
+          <button onClick={handleMerge} disabled={!mergeFrom || !mergeTo || merging}
+            style={{ background: mergeFrom && mergeTo ? "#f59e0b" : "#334155", color: mergeFrom && mergeTo ? "#1e293b" : "#64748b", border: "none", borderRadius: 8, padding: "12px 0", fontWeight: 700, fontSize: 15, cursor: mergeFrom && mergeTo ? "pointer" : "default", width: "100%" }}>
+            {merging ? "⏳ 統合中…" : "🔗 統合する"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
