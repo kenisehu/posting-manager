@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(Move-Item \"C:\\\\WINDOWS\\\\system32\\\\posting-manager\" \"C:\\\\Users\\\\kenis\\\\posting-manager\")",
-      "Read(//c/Users/kenis/**)"
+      "Read(//c/Users/kenis/**)",
+      "WebFetch(domain:www.travel-zentech.jp)",
+      "Bash(git add:*)"
     ]
   }
 }
