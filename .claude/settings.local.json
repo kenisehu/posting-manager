@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(Move-Item \"C:\\\\WINDOWS\\\\system32\\\\posting-manager\" \"C:\\\\Users\\\\kenis\\\\posting-manager\")",
+      "Read(//c/Users/kenis/**)"
     ]
   }
 }
