@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import { createClient } from "@supabase/supabase-js";
+const MapView = lazy(() => import("./MapView.jsx"));
 
 // ============================================================
 // Supabase 設定
@@ -586,6 +587,7 @@ export default function PostingApp() {
           { key: "home", label: "🏠 ホーム" },
           { key: "ranking", label: "🏆 ランキング" },
           { key: "mybadges", label: "🎖️ マイバッジ" },
+          { key: "map", label: "🗾 地図" },
           { key: "list", label: "📋 一覧" },
           { key: "history", label: "📅 履歴" },
           { key: "settings", label: "⚙️ 設定" },
@@ -614,6 +616,7 @@ export default function PostingApp() {
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} />}
             {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} />}
+            {tab === "map" && <MapTab stats={stats} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
             {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
@@ -1241,6 +1244,38 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// MapTab
+// ============================================================
+function MapTab({ stats }) {
+  const postedMunicipalityIds = useMemo(
+    () => new Set(Object.keys(stats.muniMap).map(Number)),
+    [stats.muniMap]
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>🗾 投函進捗マップ</div>
+        <div style={{ fontSize: 12, color: "#64748b" }}>
+          投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。市区町村をホバーすると詳細が確認できます。
+        </div>
+      </div>
+      <Suspense fallback={
+        <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🗾</div>
+          <div style={{ fontWeight: 600 }}>地図コンポーネントを読み込み中...</div>
+        </div>
+      }>
+        <MapView
+          postedMunicipalityIds={postedMunicipalityIds}
+          municipalitiesData={MUNICIPALITIES_DATA}
+        />
+      </Suspense>
     </div>
   );
 }
