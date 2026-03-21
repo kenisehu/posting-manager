@@ -357,6 +357,7 @@ export default function PostingApp() {
   const [tab, setTab] = useState("home");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mapExpandedPref, setMapExpandedPref] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -613,10 +614,10 @@ export default function PostingApp() {
           </div>
         ) : (
           <>
-            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} />}
+            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
             {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} />}
-            {tab === "map" && <MapTab stats={stats} />}
+            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} />}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
             {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
@@ -630,7 +631,7 @@ export default function PostingApp() {
 // ============================================================
 // Home (入力フォーム + ダッシュボード 縦並び)
 // ============================================================
-function Home({ stats, onAdd, records }) {
+function Home({ stats, onAdd, records, onPrefClick }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -639,7 +640,7 @@ function Home({ stats, onAdd, records }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} allMembers={allMembers} />
-      <Dashboard stats={stats} />
+      <Dashboard stats={stats} onPrefClick={onPrefClick} />
     </div>
   );
 }
@@ -647,7 +648,7 @@ function Home({ stats, onAdd, records }) {
 // ============================================================
 // Dashboard
 // ============================================================
-function Dashboard({ stats }) {
+function Dashboard({ stats, onPrefClick }) {
   const muniPct = (stats.completedMuni / stats.totalMuni * 100).toFixed(1);
   const flyerPct = Math.min(100, (stats.totalFlyers / stats.totalHouseholds * 100)).toFixed(2);
 
@@ -678,11 +679,18 @@ function Dashboard({ stats }) {
             const pct = ps.total > 0 ? (ps.done / ps.total * 100) : 0;
             const col = PREF_COLORS[pref];
             return (
-              <div key={pref}>
+              <div
+                key={pref}
+                onClick={() => onPrefClick?.(pref)}
+                style={{ cursor: onPrefClick ? "pointer" : "default", borderRadius: 8, padding: "6px 4px", transition: "background 0.15s" }}
+                onMouseEnter={e => { if (onPrefClick) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ background: col.accent, color: "white", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 700 }}>{pref}</span>
                     <span style={{ fontSize: 13, color: "#94a3b8" }}>{ps.done}/{ps.total} 市区町村</span>
+                    {onPrefClick && <span style={{ fontSize: 10, color: "#475569" }}>🗾 地図で見る</span>}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: col.accent }}>{pct.toFixed(0)}%</div>
                 </div>
@@ -1251,7 +1259,7 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
 // ============================================================
 // MapTab
 // ============================================================
-function MapTab({ stats }) {
+function MapTab({ stats, expandedPref, setExpandedPref }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -1262,7 +1270,7 @@ function MapTab({ stats }) {
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>🗾 投函進捗マップ</div>
         <div style={{ fontSize: 12, color: "#64748b" }}>
-          投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。市区町村をホバーすると詳細が確認できます。
+          投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。市区町村をクリックすると拡大表示されます。
         </div>
       </div>
       <Suspense fallback={
@@ -1274,6 +1282,8 @@ function MapTab({ stats }) {
         <MapView
           postedMunicipalityIds={postedMunicipalityIds}
           municipalitiesData={MUNICIPALITIES_DATA}
+          expandedPref={expandedPref}
+          setExpandedPref={setExpandedPref}
         />
       </Suspense>
     </div>

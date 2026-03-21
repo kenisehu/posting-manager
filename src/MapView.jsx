@@ -1,10 +1,17 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 
-const PREF_CODES = {
-  "茨城県": "08",
-  "栃木県": "09",
-  "群馬県": "10",
-  "埼玉県": "11",
+const PREF_ID = {
+  "茨城県": "ibaraki",
+  "栃木県": "tochigi",
+  "群馬県": "gunma",
+  "埼玉県": "saitama",
+};
+
+const PREF_GEOJSON_URLS = {
+  "茨城県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_08_210101.json",
+  "栃木県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_09_210101.json",
+  "群馬県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_10_210101.json",
+  "埼玉県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_11_210101.json",
 };
 
 const PREF_COLORS_MAP = {
@@ -58,9 +65,9 @@ function geometryToPath(geometry, project) {
   return "";
 }
 
-function getBounds(geojsonList) {
+function makeProjection(geoDataMap, W, H, PAD) {
   let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const { geojson } of geojsonList) {
+  for (const geojson of Object.values(geoDataMap)) {
     if (!geojson) continue;
     for (const feature of geojson.features || []) {
       for (const [lon, lat] of getAllCoords(feature.geometry)) {
@@ -71,101 +78,213 @@ function getBounds(geojsonList) {
       }
     }
   }
-  return { minLon, maxLon, minLat, maxLat };
+  const lonRange = maxLon - minLon;
+  const latRange = maxLat - minLat;
+  const drawW = W - PAD * 2;
+  const drawH = H - PAD * 2;
+  const scale = Math.min(drawW / lonRange, drawH / latRange);
+  const offsetX = PAD + (drawW - lonRange * scale) / 2;
+  const offsetY = PAD + (drawH - latRange * scale) / 2;
+  return (lon, lat) => [
+    offsetX + (lon - minLon) * scale,
+    offsetY + (maxLat - lat) * scale,
+  ];
 }
 
-const SVG_W = 900;
-const SVG_H = 640;
-const PAD = 24;
+function buildFeatures(geoDataMap, municipalitiesData, postedMunicipalityIds, project) {
+  const result = [];
+  for (const [pref, geojson] of Object.entries(geoDataMap)) {
+    if (!geojson) continue;
+    for (const feature of geojson.features || []) {
+      const props = feature.properties || {};
+      const normN03_004 = normalizeName(props.N03_004 || "");
+      const normN03_003 = normalizeName(props.N03_003 || "");
+      const normPropName = normalizeName(props.name || "");
 
-export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
-  const [geoData, setGeoData] = useState([]);
-  const [loadingMsg, setLoadingMsg] = useState("地図を読み込み中...");
-  const [error, setError] = useState(null);
-  const [tooltip, setTooltip] = useState(null);
-  const [hoveredIdx, setHoveredIdx] = useState(null);
-  const svgRef = useRef(null);
+      let muniMatch = normN03_004
+        ? municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normN03_004)
+        : null;
+      if (!muniMatch && normN03_003)
+        muniMatch = municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normN03_003);
+      if (!muniMatch && normPropName)
+        muniMatch = municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normPropName);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchData() {
-      try {
-        const prefectures = Object.keys(PREF_CODES);
-        const results = await Promise.all(
-          prefectures.map(async (pref) => {
-            const code = PREF_CODES[pref];
-            const url = `https://raw.githubusercontent.com/niiyz/JapanCityGeoJson/master/geojson/prefectures/${code}.json`;
-            try {
-              const res = await fetch(url);
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              const geojson = await res.json();
-              return { pref, geojson };
-            } catch (e) {
-              console.warn(`${pref} GeoJSON fetch failed:`, e);
-              return { pref, geojson: null };
-            }
-          })
-        );
-        if (!cancelled) {
-          setGeoData(results);
-          setLoadingMsg(null);
-        }
-      } catch (e) {
-        if (!cancelled) setError("地図の読み込みに失敗しました。");
-      }
+      const geoName = muniMatch?.name || normN03_004 || normN03_003 || normPropName;
+      const isPosted = !!(muniMatch && postedMunicipalityIds.has(muniMatch.id));
+      const d = geometryToPath(feature.geometry, project);
+      if (d) result.push({ pref, geoName, muniMatch, isPosted, d });
     }
-    fetchData();
-    return () => { cancelled = true; };
+  }
+  return result;
+}
+
+// ============================================================
+// 合体地図（4県を1枚のSVGで表示）
+// ============================================================
+const COMB_W = 900, COMB_H = 620, COMB_PAD = 28;
+
+function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref }) {
+  const svgRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [hoveredPref, setHoveredPref] = useState(null);
+
+  const features = useMemo(() => {
+    if (Object.keys(geoData).length === 0) return [];
+    const project = makeProjection(geoData, COMB_W, COMB_H, COMB_PAD);
+    return buildFeatures(geoData, municipalitiesData, postedMunicipalityIds, project);
+  }, [geoData, municipalitiesData, postedMunicipalityIds]);
+
+  const handleMouseMove = useCallback((e, f) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltip({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      pref: f.pref,
+      name: f.muniMatch?.name || f.geoName,
+      households: f.muniMatch?.households,
+      isPosted: f.isPosted,
+    });
+    setHoveredPref(f.pref);
   }, []);
 
-  // GeoJSONからSVGパスを計算（重い処理・geoDataが変わったときのみ）
-  const { rawFeatures } = useMemo(() => {
-    if (geoData.length === 0) return { rawFeatures: [] };
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
+    setHoveredPref(null);
+  }, []);
 
-    const bounds = getBounds(geoData);
-    const { minLon, maxLon, minLat, maxLat } = bounds;
-    const lonRange = maxLon - minLon;
-    const latRange = maxLat - minLat;
-    const drawW = SVG_W - PAD * 2;
-    const drawH = SVG_H - PAD * 2;
-    const scale = Math.min(drawW / lonRange, drawH / latRange);
-    const offsetX = PAD + (drawW - lonRange * scale) / 2;
-    const offsetY = PAD + (drawH - latRange * scale) / 2;
-
-    function project(lon, lat) {
-      return [
-        offsetX + (lon - minLon) * scale,
-        offsetY + (maxLat - lat) * scale,
-      ];
+  const prefGroups = useMemo(() => {
+    const map = {};
+    for (const f of features) {
+      if (!map[f.pref]) map[f.pref] = [];
+      map[f.pref].push(f);
     }
+    return map;
+  }, [features]);
 
-    const rawFeatures = [];
-    for (const { pref, geojson } of geoData) {
-      if (!geojson) continue;
-      for (const feature of geojson.features || []) {
-        const geoName = normalizeName(
-          feature.properties?.N03_004 ||
-          feature.properties?.name ||
-          feature.properties?.N03_003 || ""
-        );
-        const muniMatch = municipalitiesData.find(
-          (m) => m.prefecture === pref && normalizeName(m.name) === geoName
-        );
-        const d = geometryToPath(feature.geometry, project);
-        if (d) rawFeatures.push({ pref, geoName, muniMatch, d });
-      }
-    }
-    return { rawFeatures };
-  }, [geoData, municipalitiesData]);
+  return (
+    <div style={{ position: "relative", background: "#e8eef5", borderRadius: 10, overflow: "hidden", border: "1px solid #cbd5e1" }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${COMB_W} ${COMB_H}`}
+        style={{ width: "100%", height: "auto", display: "block" }}
+      >
+        <defs>
+          {Object.entries(PREF_ID).map(([pref, id]) => (
+            <filter key={id} id={`pref-border-${id}`} x="-4%" y="-4%" width="108%" height="108%">
+              <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="dilated"/>
+              <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+              <feFlood floodColor={PREF_BORDER_MAP[pref]} result="color"/>
+              <feComposite in="color" in2="ring" operator="in"/>
+            </filter>
+          ))}
+        </defs>
 
-  // isPosted状態を付与（postedMunicipalityIdsが変わったときのみ）
-  const features = useMemo(() =>
-    rawFeatures.map((f) => ({
-      ...f,
-      isPosted: !!(f.muniMatch && postedMunicipalityIds.has(f.muniMatch.id)),
-    })),
-    [rawFeatures, postedMunicipalityIds]
+        <rect width={COMB_W} height={COMB_H} fill="#e8eef5" />
+
+        {/* 市区町村の塗り */}
+        {features.map((f, i) => {
+          const color = PREF_COLORS_MAP[f.pref];
+          const borderColor = PREF_BORDER_MAP[f.pref];
+          const isHov = hoveredPref === f.pref;
+          return (
+            <path
+              key={i}
+              d={f.d}
+              fill={f.isPosted ? color : (isHov ? "#c0cedd" : "#d4dde8")}
+              fillOpacity={f.isPosted ? (isHov ? 1.0 : 0.85) : 1}
+              stroke="#9aacbf"
+              strokeWidth={0.4}
+              style={{ cursor: "pointer" }}
+              onClick={() => onClickPref(f.pref)}
+              onMouseMove={(e) => handleMouseMove(e, f)}
+              onMouseLeave={handleMouseLeave}
+            />
+          );
+        })}
+
+        {/* 県境の太線（feMorphologyで各県シルエット外周を描く） */}
+        {Object.keys(PREF_GEOJSON_URLS).map((pref) => {
+          const grp = prefGroups[pref];
+          if (!grp) return null;
+          const id = PREF_ID[pref];
+          return (
+            <g key={pref} filter={`url(#pref-border-${id})`} style={{ pointerEvents: "none" }}>
+              {grp.map((f, i) => (
+                <path key={i} d={f.d} fill="black" />
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* 都道府県ラベル（凡例） */}
+      <div style={{
+        position: "absolute", bottom: 10, right: 12,
+        display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end",
+      }}>
+        {Object.entries(PREF_COLORS_MAP).map(([pref, color]) => (
+          <div
+            key={pref}
+            onClick={() => onClickPref(pref)}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: "rgba(255,255,255,0.85)", borderRadius: 4,
+              padding: "3px 7px", fontSize: 11, fontWeight: 600,
+              color: PREF_BORDER_MAP[pref], cursor: "pointer",
+              border: `1px solid ${color}`,
+            }}
+          >
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
+            {pref}
+          </div>
+        ))}
+      </div>
+
+      {tooltip && (
+        <div style={{
+          position: "absolute",
+          left: Math.min(tooltip.x + 14, COMB_W - 185),
+          top: Math.max(tooltip.y - 70, 4),
+          background: "white",
+          border: `1px solid ${PREF_BORDER_MAP[tooltip.pref]}`,
+          borderLeft: `4px solid ${PREF_COLORS_MAP[tooltip.pref]}`,
+          borderRadius: 6, padding: "7px 12px", fontSize: 13,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+          pointerEvents: "none", whiteSpace: "nowrap", zIndex: 10,
+        }}>
+          <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: 2 }}>{tooltip.name}</div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 3 }}>{tooltip.pref}</div>
+          {tooltip.households && (
+            <div style={{ fontSize: 11, color: "#475569" }}>{tooltip.households.toLocaleString()} 世帯</div>
+          )}
+          <div style={{ fontSize: 11, fontWeight: 600, color: tooltip.isPosted ? "#10b981" : "#64748b", marginTop: 2 }}>
+            {tooltip.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+// ============================================================
+// 拡大表示（都道府県単体）
+// ============================================================
+const PREF_W = 700, PREF_H = 520, PREF_PAD = 24;
+
+function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
+  const svgRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  const color = PREF_COLORS_MAP[pref];
+  const borderColor = PREF_BORDER_MAP[pref];
+
+  const features = useMemo(() => {
+    if (!geojson) return [];
+    const project = makeProjection({ [pref]: geojson }, PREF_W, PREF_H, PREF_PAD);
+    return buildFeatures({ [pref]: geojson }, municipalitiesData, postedMunicipalityIds, project);
+  }, [geojson, municipalitiesData, postedMunicipalityIds, pref]);
 
   const stats = useMemo(() => ({
     total: features.filter((f) => f.muniMatch).length,
@@ -173,17 +292,141 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
   }), [features]);
 
   const handleMouseMove = useCallback((e, f, idx) => {
-    const svgRect = svgRef.current?.getBoundingClientRect();
-    if (!svgRect) return;
-    const x = e.clientX - svgRect.left;
-    const y = e.clientY - svgRect.top;
-    setTooltip({ x, y, pref: f.pref, name: f.muniMatch?.name || f.geoName, households: f.muniMatch?.households, isPosted: f.isPosted });
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltip({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      name: f.muniMatch?.name || f.geoName,
+      households: f.muniMatch?.households,
+      isPosted: f.isPosted,
+    });
     setHoveredIdx(idx);
   }, []);
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
     setHoveredIdx(null);
+  }, []);
+
+  const pct = stats.total > 0 ? Math.round((stats.posted / stats.total) * 100) : 0;
+
+  return (
+    <div style={{ background: "#1e293b", overflow: "hidden" }}>
+      {/* ヘッダー */}
+      <div style={{
+        padding: "12px 16px", background: "#0f172a",
+        borderBottom: `2px solid ${borderColor}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 18, color }}>{pref}</div>
+        <div style={{ fontSize: 13, color: "#94a3b8" }}>
+          投函済み <span style={{ color, fontWeight: 700 }}>{stats.posted}</span>
+          {" "}/ {stats.total} 市区町村
+          {stats.total > 0 && <span style={{ marginLeft: 6, color: "#64748b" }}>({pct}%)</span>}
+        </div>
+      </div>
+
+      {/* プログレスバー */}
+      <div style={{ height: 4, background: "#334155" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: color, transition: "width 0.4s ease" }} />
+      </div>
+
+      {/* SVG地図 */}
+      <div style={{ position: "relative", background: "#f0f4f8" }}>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${PREF_W} ${PREF_H}`}
+          style={{ width: "100%", height: "auto", display: "block" }}
+        >
+          <rect width={PREF_W} height={PREF_H} fill="#e8eef5" />
+          {features.map((f, i) => {
+            if (f.isPosted) return null;
+            const isHov = hoveredIdx === i;
+            return (
+              <path key={i} d={f.d}
+                fill={isHov ? "#c8d3e0" : "#d4dde8"} stroke="#9aacbf"
+                strokeWidth={isHov ? 1.2 : 0.5} style={{ cursor: "pointer" }}
+                onMouseMove={(e) => handleMouseMove(e, f, i)}
+                onMouseLeave={handleMouseLeave}
+              />
+            );
+          })}
+          {features.map((f, i) => {
+            if (!f.isPosted) return null;
+            const isHov = hoveredIdx === i;
+            return (
+              <path key={i} d={f.d}
+                fill={color} fillOpacity={isHov ? 1.0 : 0.85}
+                stroke={borderColor} strokeWidth={isHov ? 2.0 : 0.9}
+                style={{ cursor: "pointer" }}
+                onMouseMove={(e) => handleMouseMove(e, f, i)}
+                onMouseLeave={handleMouseLeave}
+              />
+            );
+          })}
+        </svg>
+
+        {tooltip && (
+          <div style={{
+            position: "absolute",
+            left: Math.min(tooltip.x + 14, PREF_W - 170),
+            top: Math.max(tooltip.y - 60, 4),
+            background: "white",
+            border: `1px solid ${borderColor}`, borderLeft: `4px solid ${color}`,
+            borderRadius: 6, padding: "7px 12px", fontSize: 13,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            pointerEvents: "none", whiteSpace: "nowrap", zIndex: 10,
+          }}>
+            <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: 2 }}>{tooltip.name}</div>
+            {tooltip.households && (
+              <div style={{ fontSize: 11, color: "#475569" }}>{tooltip.households.toLocaleString()} 世帯</div>
+            )}
+            <div style={{ fontSize: 11, fontWeight: 600, color: tooltip.isPosted ? "#10b981" : "#64748b", marginTop: 2 }}>
+              {tooltip.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MapView メイン
+// ============================================================
+export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref }) {
+  const [geoData, setGeoData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchData() {
+      try {
+        const results = await Promise.all(
+          Object.entries(PREF_GEOJSON_URLS).map(async ([pref, url]) => {
+            try {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const geojson = await res.json();
+              return [pref, geojson];
+            } catch (e) {
+              console.warn(`${pref} GeoJSON fetch failed:`, e);
+              return [pref, null];
+            }
+          })
+        );
+        if (!cancelled) {
+          setGeoData(Object.fromEntries(results));
+          setLoading(false);
+        }
+      } catch (e) {
+        if (!cancelled) setError("地図の読み込みに失敗しました。");
+      }
+    }
+    fetchData();
+    return () => { cancelled = true; };
   }, []);
 
   if (error) {
@@ -196,113 +439,95 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
     );
   }
 
-  if (loadingMsg) {
+  if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 60, color: "#64748b" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🗾</div>
-        <div style={{ fontSize: 14 }}>{loadingMsg}</div>
+        <div style={{ fontSize: 14 }}>地図を読み込み中...</div>
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* 凡例＋統計 */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-        {Object.entries(PREF_COLORS_MAP).map(([pref, color]) => (
-          <div key={pref} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b" }}>
-            <div style={{ width: 14, height: 14, borderRadius: 3, background: color, opacity: 0.7, border: `2px solid ${PREF_BORDER_MAP[pref]}` }} />
-            {pref}
-          </div>
-        ))}
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#64748b" }}>
-          <div style={{ width: 14, height: 14, borderRadius: 3, background: "#e2e8f0", border: "2px solid #94a3b8" }} />
-          投函済み
-        </div>
-        {stats.total > 0 && (
-          <div style={{ marginLeft: "auto", fontSize: 13, color: "#475569" }}>
-            投函済み <span style={{ color: "#f59e0b", fontWeight: 700 }}>{stats.posted}</span> / {stats.total} 市区町村
-          </div>
-        )}
+      {/* 操作ヒント */}
+      <div style={{ fontSize: 12, color: "#64748b" }}>
+        地図上の市区町村をクリックすると、その都道府県を拡大表示できます。
       </div>
 
-      {/* SVG地図 */}
-      <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #cbd5e1", background: "#ffffff" }}>
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-          style={{ width: "100%", height: "auto", display: "block" }}
+      {/* 合体地図 */}
+      <CombinedMap
+        geoData={geoData}
+        postedMunicipalityIds={postedMunicipalityIds}
+        municipalitiesData={municipalitiesData}
+        onClickPref={setExpandedPref}
+      />
+
+      {/* 拡大モーダル */}
+      {expandedPref && (
+        <div
+          onClick={() => setExpandedPref(null)}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.78)",
+            zIndex: 1000,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+          }}
         >
-          {/* 背景 */}
-          <rect width={SVG_W} height={SVG_H} fill="#eef2f7" />
-
-          {/* 市区町村パス */}
-          {features.map((f, i) => {
-            const color = PREF_COLORS_MAP[f.pref];
-            const borderColor = PREF_BORDER_MAP[f.pref];
-            const isHovered = hoveredIdx === i;
-            if (f.isPosted) {
-              return (
-                <path
-                  key={i}
-                  d={f.d}
-                  fill={isHovered ? "#cbd5e1" : "#e2e8f0"}
-                  stroke="#94a3b8"
-                  strokeWidth={isHovered ? 1.5 : 0.6}
-                  style={{ cursor: "pointer" }}
-                  onMouseMove={(e) => handleMouseMove(e, f, i)}
-                  onMouseLeave={handleMouseLeave}
-                />
-              );
-            }
-            return (
-              <path
-                key={i}
-                d={f.d}
-                fill={color}
-                fillOpacity={isHovered ? 0.85 : 0.55}
-                stroke={borderColor}
-                strokeWidth={isHovered ? 1.5 : 0.6}
-                style={{ cursor: "pointer" }}
-                onMouseMove={(e) => handleMouseMove(e, f, i)}
-                onMouseLeave={handleMouseLeave}
-              />
-            );
-          })}
-        </svg>
-
-        {/* ツールチップ */}
-        {tooltip && (
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              position: "absolute",
-              left: Math.min(tooltip.x + 14, SVG_W - 180),
-              top: Math.max(tooltip.y - 60, 4),
-              background: "white",
-              border: `1px solid ${PREF_BORDER_MAP[tooltip.pref]}`,
-              borderLeft: `4px solid ${PREF_COLORS_MAP[tooltip.pref]}`,
-              borderRadius: 6,
-              padding: "7px 12px",
-              fontSize: 13,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-              pointerEvents: "none",
-              whiteSpace: "nowrap",
-              zIndex: 10,
+              width: "100%", maxWidth: 760,
+              maxHeight: "92vh",
+              display: "flex", flexDirection: "column",
+              borderRadius: 12, overflow: "hidden",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
             }}
           >
-            <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: 2 }}>
-              {tooltip.name}
+            {/* モーダルヘッダー（閉じる＋他県ナビ） */}
+            <div style={{
+              background: "#0f172a", padding: "8px 12px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              {Object.keys(PREF_GEOJSON_URLS).map((pref) => (
+                <button
+                  key={pref}
+                  onClick={() => setExpandedPref(pref)}
+                  style={{
+                    background: expandedPref === pref ? PREF_COLORS_MAP[pref] : "transparent",
+                    border: `1px solid ${PREF_COLORS_MAP[pref]}`,
+                    color: expandedPref === pref ? "#0f172a" : PREF_COLORS_MAP[pref],
+                    borderRadius: 5, padding: "4px 10px", fontSize: 12,
+                    fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  {pref}
+                </button>
+              ))}
+              <button
+                onClick={() => setExpandedPref(null)}
+                style={{
+                  marginLeft: "auto", background: "transparent",
+                  border: "1px solid #475569", color: "#94a3b8",
+                  borderRadius: 5, padding: "4px 12px", fontSize: 12, cursor: "pointer",
+                }}
+              >
+                ✕ 閉じる
+              </button>
             </div>
-            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 3 }}>{tooltip.pref}</div>
-            {tooltip.households && (
-              <div style={{ fontSize: 11, color: "#475569" }}>{tooltip.households.toLocaleString()} 世帯</div>
-            )}
-            <div style={{ fontSize: 11, fontWeight: 600, color: tooltip.isPosted ? "#10b981" : "#ef4444", marginTop: 2 }}>
-              {tooltip.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
+
+            <div style={{ overflowY: "auto" }}>
+              <PrefMap
+                pref={expandedPref}
+                geojson={geoData[expandedPref]}
+                postedMunicipalityIds={postedMunicipalityIds}
+                municipalitiesData={municipalitiesData}
+              />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
