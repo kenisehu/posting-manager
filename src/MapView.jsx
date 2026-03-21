@@ -1,5 +1,12 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 
+const PREF_ID = {
+  "茨城県": "ibaraki",
+  "栃木県": "tochigi",
+  "群馬県": "gunma",
+  "埼玉県": "saitama",
+};
+
 const PREF_GEOJSON_URLS = {
   "茨城県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_08_210101.json",
   "栃木県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_09_210101.json",
@@ -146,6 +153,15 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
     setHoveredPref(null);
   }, []);
 
+  const prefGroups = useMemo(() => {
+    const map = {};
+    for (const f of features) {
+      if (!map[f.pref]) map[f.pref] = [];
+      map[f.pref].push(f);
+    }
+    return map;
+  }, [features]);
+
   return (
     <div style={{ position: "relative", background: "#e8eef5", borderRadius: 10, overflow: "hidden", border: "1px solid #cbd5e1" }}>
       <svg
@@ -153,7 +169,20 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
         viewBox={`0 0 ${COMB_W} ${COMB_H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
       >
+        <defs>
+          {Object.entries(PREF_ID).map(([pref, id]) => (
+            <filter key={id} id={`pref-border-${id}`} x="-4%" y="-4%" width="108%" height="108%">
+              <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="dilated"/>
+              <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+              <feFlood floodColor={PREF_BORDER_MAP[pref]} result="color"/>
+              <feComposite in="color" in2="ring" operator="in"/>
+            </filter>
+          ))}
+        </defs>
+
         <rect width={COMB_W} height={COMB_H} fill="#e8eef5" />
+
+        {/* 市区町村の塗り */}
         {features.map((f, i) => {
           const color = PREF_COLORS_MAP[f.pref];
           const borderColor = PREF_BORDER_MAP[f.pref];
@@ -164,13 +193,27 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
               d={f.d}
               fill={f.isPosted ? color : (isHov ? "#c0cedd" : "#d4dde8")}
               fillOpacity={f.isPosted ? (isHov ? 1.0 : 0.85) : 1}
-              stroke={isHov ? borderColor : "#9aacbf"}
-              strokeWidth={isHov ? 1.2 : 0.5}
+              stroke="#9aacbf"
+              strokeWidth={0.4}
               style={{ cursor: "pointer" }}
               onClick={() => onClickPref(f.pref)}
               onMouseMove={(e) => handleMouseMove(e, f)}
               onMouseLeave={handleMouseLeave}
             />
+          );
+        })}
+
+        {/* 県境の太線（feMorphologyで各県シルエット外周を描く） */}
+        {Object.keys(PREF_GEOJSON_URLS).map((pref) => {
+          const grp = prefGroups[pref];
+          if (!grp) return null;
+          const id = PREF_ID[pref];
+          return (
+            <g key={pref} filter={`url(#pref-border-${id})`} style={{ pointerEvents: "none" }}>
+              {grp.map((f, i) => (
+                <path key={i} d={f.d} fill="black" />
+              ))}
+            </g>
           );
         })}
       </svg>
