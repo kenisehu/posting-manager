@@ -143,14 +143,25 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
     for (const { pref, geojson } of geoData) {
       if (!geojson) continue;
       for (const feature of geojson.features || []) {
-        const geoName = normalizeName(
-          feature.properties?.N03_004 ||
-          feature.properties?.name ||
-          feature.properties?.N03_003 || ""
-        );
-        const muniMatch = municipalitiesData.find(
-          (m) => m.prefecture === pref && normalizeName(m.name) === geoName
-        );
+        const props = feature.properties || {};
+        // N03_004: 市区町村名（政令指定都市の場合は区名）
+        // N03_003: 郡・政令市名（政令指定都市の場合は市名）
+        const normN03_004 = normalizeName(props.N03_004 || "");
+        const normN03_003 = normalizeName(props.N03_003 || "");
+        const normPropName = normalizeName(props.name || "");
+
+        // まず N03_004 で検索、なければ N03_003（政令指定都市対応）、最後に name で検索
+        let muniMatch = normN03_004
+          ? municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normN03_004)
+          : null;
+        if (!muniMatch && normN03_003) {
+          muniMatch = municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normN03_003);
+        }
+        if (!muniMatch && normPropName) {
+          muniMatch = municipalitiesData.find((m) => m.prefecture === pref && normalizeName(m.name) === normPropName);
+        }
+
+        const geoName = muniMatch?.name || normN03_004 || normN03_003 || normPropName;
         const d = geometryToPath(feature.geometry, project);
         if (d) rawFeatures.push({ pref, geoName, muniMatch, d });
       }
