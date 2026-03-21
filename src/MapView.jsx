@@ -63,7 +63,7 @@ const SVG_H = 460;
 const PAD = 20;
 
 // 都道府県単体の地図コンポーネント
-function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
+function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onClick, expanded }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -161,12 +161,20 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
   const pct = stats.total > 0 ? Math.round((stats.posted / stats.total) * 100) : 0;
 
   return (
-    <div style={{
-      background: "#1e293b",
-      borderRadius: 10,
-      border: `1px solid ${borderColor}`,
-      overflow: "hidden",
-    }}>
+    <div
+      onClick={!expanded ? onClick : undefined}
+      style={{
+        background: "#1e293b",
+        borderRadius: 10,
+        border: `1px solid ${borderColor}`,
+        overflow: "hidden",
+        cursor: expanded ? "default" : "pointer",
+        transition: "box-shadow 0.2s, transform 0.2s",
+        ...(expanded ? {} : { ":hover": { boxShadow: `0 0 0 2px ${color}` } }),
+      }}
+      onMouseEnter={e => { if (!expanded) e.currentTarget.style.boxShadow = `0 0 0 2px ${color}`; }}
+      onMouseLeave={e => { if (!expanded) e.currentTarget.style.boxShadow = "none"; }}
+    >
       {/* ヘッダー */}
       <div style={{
         padding: "10px 14px",
@@ -176,8 +184,9 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
         justifyContent: "space-between",
         alignItems: "center",
       }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color }}>
+        <div style={{ fontWeight: 700, fontSize: expanded ? 18 : 15, color }}>
           {pref}
+          {!expanded && <span style={{ fontSize: 11, color: "#475569", marginLeft: 8, fontWeight: 400 }}>タップで拡大</span>}
         </div>
         <div style={{ fontSize: 12, color: "#94a3b8" }}>
           投函済み{" "}
@@ -287,6 +296,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
   const [geoData, setGeoData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedPref, setExpandedPref] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -361,9 +371,61 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData }) {
             geojson={geoData[pref]}
             postedMunicipalityIds={postedMunicipalityIds}
             municipalitiesData={municipalitiesData}
+            onClick={() => setExpandedPref(pref)}
           />
         ))}
       </div>
+
+      {/* 拡大モーダル */}
+      {expandedPref && (
+        <div
+          onClick={() => setExpandedPref(null)}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            zIndex: 1000,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 800,
+              maxHeight: "90vh",
+              display: "flex", flexDirection: "column",
+              borderRadius: 12, overflow: "hidden",
+            }}
+          >
+            {/* 閉じるボタン */}
+            <div style={{
+              background: "#0f172a",
+              padding: "10px 14px",
+              display: "flex", justifyContent: "flex-end",
+            }}>
+              <button
+                onClick={() => setExpandedPref(null)}
+                style={{
+                  background: "transparent", border: "1px solid #475569",
+                  color: "#94a3b8", borderRadius: 6, padding: "4px 12px",
+                  fontSize: 13, cursor: "pointer",
+                }}
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+            <div style={{ overflowY: "auto" }}>
+              <PrefMap
+                pref={expandedPref}
+                geojson={geoData[expandedPref]}
+                postedMunicipalityIds={postedMunicipalityIds}
+                municipalitiesData={municipalitiesData}
+                expanded
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
