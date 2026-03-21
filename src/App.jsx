@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { createClient } from "@supabase/supabase-js";
 const MapView = lazy(() => import("./MapView.jsx"));
+const StationTab = lazy(() => import("./StationTab.jsx"));
 
 // ============================================================
 // Supabase 設定
@@ -589,6 +590,7 @@ export default function PostingApp() {
           { key: "ranking", label: "🏆 ランキング" },
           { key: "mybadges", label: "🎖️ マイバッジ" },
           { key: "map", label: "🗾 地図" },
+          { key: "station", label: "🚉 路線" },
           { key: "list", label: "📋 一覧" },
           { key: "history", label: "📅 履歴" },
           { key: "settings", label: "⚙️ 設定" },
@@ -618,6 +620,11 @@ export default function PostingApp() {
             {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} />}
+            {tab === "station" && (
+              <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
+                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} />
+              </Suspense>
+            )}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
             {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
