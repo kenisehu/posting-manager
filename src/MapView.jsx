@@ -123,7 +123,7 @@ function buildFeatures(geoDataMap, municipalitiesData, postedMunicipalityIds, pr
 // ============================================================
 const COMB_W = 900, COMB_H = 620, COMB_PAD = 28;
 
-function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref }) {
+function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref, onMuniClick }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredPref, setHoveredPref] = useState(null);
@@ -196,7 +196,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
               stroke="#9aacbf"
               strokeWidth={0.4}
               style={{ cursor: "pointer" }}
-              onClick={() => onClickPref(f.pref)}
+              onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
               onMouseMove={(e) => handleMouseMove(e, f)}
               onMouseLeave={handleMouseLeave}
             />
@@ -272,7 +272,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
 // ============================================================
 const PREF_W = 700, PREF_H = 520, PREF_PAD = 24;
 
-function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
+function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onMuniClick }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -347,6 +347,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
               <path key={i} d={f.d}
                 fill={isHov ? "#c8d3e0" : "#d4dde8"} stroke="#9aacbf"
                 strokeWidth={isHov ? 1.2 : 0.5} style={{ cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
                 onMouseMove={(e) => handleMouseMove(e, f, i)}
                 onMouseLeave={handleMouseLeave}
               />
@@ -360,6 +361,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
                 fill={color} fillOpacity={isHov ? 1.0 : 0.85}
                 stroke={borderColor} strokeWidth={isHov ? 2.0 : 0.9}
                 style={{ cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
                 onMouseMove={(e) => handleMouseMove(e, f, i)}
                 onMouseLeave={handleMouseLeave}
               />
@@ -395,10 +397,22 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData }) {
 // ============================================================
 // MapView メイン
 // ============================================================
-export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref }) {
+export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations }) {
   const [geoData, setGeoData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [muniPopup, setMuniPopup] = useState(null);
+
+  const handleMuniClick = useCallback((e, f) => {
+    setMuniPopup({
+      name: f.muniMatch?.name || f.geoName,
+      pref: f.pref,
+      isPosted: f.isPosted,
+      households: f.muniMatch?.households,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,6 +475,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
         postedMunicipalityIds={postedMunicipalityIds}
         municipalitiesData={municipalitiesData}
         onClickPref={setExpandedPref}
+        onMuniClick={handleMuniClick}
       />
 
       {/* 拡大モーダル */}
@@ -523,11 +538,79 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 geojson={geoData[expandedPref]}
                 postedMunicipalityIds={postedMunicipalityIds}
                 municipalitiesData={municipalitiesData}
+                onMuniClick={handleMuniClick}
               />
             </div>
           </div>
         </div>
       )}
+
+      {/* 市区町村クリックポップアップ（fixed位置） */}
+      {muniPopup && (() => {
+        const borderColor = PREF_BORDER_MAP[muniPopup.pref] || "#334155";
+        const prefColor = PREF_COLORS_MAP[muniPopup.pref] || "#94a3b8";
+        const stations = muniStations?.[muniPopup.name] || [];
+        const byLine = stations.reduce((acc, s) => {
+          if (!acc[s.line]) acc[s.line] = [];
+          acc[s.line].push(s.station);
+          return acc;
+        }, {});
+        const popX = Math.min(muniPopup.clientX + 12, window.innerWidth - 270);
+        const popY = Math.min(muniPopup.clientY - 10, window.innerHeight - 320);
+        return (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "fixed", left: popX, top: popY,
+              background: "#1e293b", border: `1.5px solid ${borderColor}`,
+              borderTop: `3px solid ${prefColor}`,
+              borderRadius: 10, padding: "12px 14px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+              zIndex: 3000, minWidth: 220, maxWidth: 260,
+              maxHeight: 320, overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 14 }}>{muniPopup.name}</div>
+                <div style={{ fontSize: 10, color: "#64748b" }}>{muniPopup.pref}</div>
+              </div>
+              <button onClick={() => setMuniPopup(null)} style={{
+                background: "none", border: "none", color: "#64748b",
+                cursor: "pointer", fontSize: 18, padding: "0 0 0 8px", lineHeight: 1,
+              }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: muniPopup.isPosted ? "#4ade80" : "#f59e0b", marginBottom: 10 }}>
+              {muniPopup.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
+              {muniPopup.households && <span style={{ color: "#64748b", fontWeight: 400, marginLeft: 6 }}>{muniPopup.households.toLocaleString()}世帯</span>}
+            </div>
+            {!muniStations ? (
+              <div style={{ fontSize: 11, color: "#64748b" }}>🚉 路線タブを開くと駅情報が表示されます</div>
+            ) : stations.length === 0 ? (
+              <div style={{ fontSize: 11, color: "#64748b" }}>この市区町村に駅はありません</div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>🚃 利用できる駅</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {Object.entries(byLine).map(([line, stns]) => (
+                    <div key={line}>
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>{line}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {stns.map(stn => (
+                          <span key={stn} style={{
+                            background: "#0f172a", border: "1px solid #334155",
+                            borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "#e2e8f0",
+                          }}>🚉 {stn}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

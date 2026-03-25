@@ -375,6 +375,7 @@ export default function PostingApp() {
   const [loading, setLoading] = useState(true);
   const [mapExpandedPref, setMapExpandedPref] = useState(null);
   const [stationLineMunis, setStationLineMunis] = useState(null);
+  const [muniStations, setMuniStations] = useState(null);
   const [stationInitialLine, setStationInitialLine] = useState(null);
 
   useEffect(() => {
@@ -653,10 +654,10 @@ export default function PostingApp() {
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
             {tab === "ranking" && <Ranking stats={stats} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} />}
-            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} />}
+            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
-                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={setStationLineMunis} initialLine={stationInitialLine} onInitialLineApplied={() => setStationInitialLine(null)} />
+                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={({ lineMuniMap, muniStationsMap }) => { setStationLineMunis(lineMuniMap); setMuniStations(muniStationsMap); }} initialLine={stationInitialLine} onInitialLineApplied={() => setStationInitialLine(null)} />
               </Suspense>
             )}
             {tab === "list" && <MuniList stats={stats} />}
@@ -1416,7 +1417,7 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
 // ============================================================
 // MapTab
 // ============================================================
-function MapTab({ stats, expandedPref, setExpandedPref }) {
+function MapTab({ stats, expandedPref, setExpandedPref, muniStations }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -1441,6 +1442,7 @@ function MapTab({ stats, expandedPref, setExpandedPref }) {
           municipalitiesData={MUNICIPALITIES_DATA}
           expandedPref={expandedPref}
           setExpandedPref={setExpandedPref}
+          muniStations={muniStations}
         />
       </Suspense>
     </div>

@@ -152,14 +152,24 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
         }
       }
 
-      // 路線 → 市区町村マップを親に通知（路線制覇バッジ用）
+      // 路線 → 市区町村マップ & 市区町村 → 駅リストを親に通知
       if (onDataLoaded) {
         const lineMuniMap = {};
+        const muniStationsMap = {};
+        const seen = {};
         for (const s of result) {
+          // 路線→市区町村
           if (!lineMuniMap[s.line]) lineMuniMap[s.line] = new Set();
           lineMuniMap[s.line].add(s.municipality);
+          // 市区町村→駅（重複除去）
+          if (!muniStationsMap[s.municipality]) { muniStationsMap[s.municipality] = []; seen[s.municipality] = new Set(); }
+          const key = `${s.line}|${s.station}`;
+          if (!seen[s.municipality].has(key)) {
+            muniStationsMap[s.municipality].push({ station: s.station, line: s.line });
+            seen[s.municipality].add(key);
+          }
         }
-        onDataLoaded(lineMuniMap);
+        onDataLoaded({ lineMuniMap, muniStationsMap });
       }
 
       setEnriched(result);
