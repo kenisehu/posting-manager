@@ -857,11 +857,25 @@ function RankCard({ config, data, memberBadges }) {
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
-                    {badges.map(b => (
-                      <span key={b.id} title={`${b.label}：${b.desc}`} style={{
-                        fontSize: 15, cursor: "default", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))"
-                      }}>{b.icon}</span>
-                    ))}
+                    {[
+                      // カテゴリごとに最高ランクのみ
+                      ...Object.values(badges.reduce((acc, b) => {
+                        if (!b.category) return acc;
+                        if (!acc[b.category] || b.rank > acc[b.category].rank) acc[b.category] = b;
+                        return acc;
+                      }, {})),
+                      // 路線制覇バッジ（カテゴリなし）
+                      ...badges.filter(b => !b.category),
+                    ].map(b => {
+                      const rc = b.category ? (RANK_COLORS[b.rank] || "#94a3b8") : "#a855f7";
+                      return (
+                        <span key={b.id} title={`${b.category || "路線制覇"} ${b.category ? RANK_LABELS[b.rank] : ""}：${b.label}`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 2, background: rc + "22", border: `1px solid ${rc}55`, borderRadius: 5, padding: "2px 5px", cursor: "default" }}>
+                          <span style={{ fontSize: 12 }}>{b.catIcon || "🚃"}</span>
+                          <span style={{ color: rc, fontWeight: 900, fontSize: 9 }}>{b.category ? `R${b.rank}` : "★"}</span>
+                        </span>
+                      );
+                    })}
                   </div>
                   <span style={{ fontWeight: 700, color: config.color, fontSize: 13, whiteSpace: "nowrap", marginLeft: 6 }}>
                     {config.toLocale ? m.count.toLocaleString() : m.count}{config.unit}
