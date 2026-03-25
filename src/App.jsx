@@ -318,32 +318,36 @@ const NEIGHBORS = {
 // ============================================================
 // バッジ定義
 // ============================================================
+// ランク色：1=コモン 2=ブロンズ 3=シルバー 4=ゴールド 5=プラチナ 6=レジェンド
+const RANK_COLORS = ["", "#94a3b8", "#cd7f32", "#9ca3af", "#f59e0b", "#a855f7", "#ec4899"];
+const RANK_LABELS = ["", "RANK 1", "RANK 2", "RANK 3", "RANK 4", "RANK 5", "RANK 6"];
+
 const BADGE_DEFS = [
-  // 投函枚数
-  { id: "flyer_500",    icon: "📬", label: "ポスター見習い",   desc: "累計500枚投函",     color: "#94a3b8", check: s => s.totalFlyers >= 500 },
-  { id: "flyer_1000",   icon: "📮", label: "配達人",           desc: "累計1,000枚投函",   color: "#f59e0b", check: s => s.totalFlyers >= 1000 },
-  { id: "flyer_3000",   icon: "📦", label: "ポスタリスト",     desc: "累計3,000枚投函",   color: "#f59e0b", check: s => s.totalFlyers >= 3000 },
-  { id: "flyer_5000",   icon: "🚀", label: "投函マシーン",     desc: "累計5,000枚投函",   color: "#10b981", check: s => s.totalFlyers >= 5000 },
-  { id: "flyer_10000",  icon: "🌟", label: "レジェンド配達人", desc: "累計10,000枚投函",  color: "#ec4899", check: s => s.totalFlyers >= 10000 },
-  { id: "flyer_30000",  icon: "👑", label: "投函王",           desc: "累計30,000枚投函",  color: "#f59e0b", check: s => s.totalFlyers >= 30000 },
-  // 制覇市区町村数
-  { id: "conq_1",   icon: "🏁", label: "第一歩",         desc: "1市区町村制覇",    color: "#94a3b8", check: s => s.conquest >= 1 },
-  { id: "conq_5",   icon: "🗺️", label: "エリア探検家",   desc: "5市区町村制覇",    color: "#f59e0b", check: s => s.conquest >= 5 },
-  { id: "conq_10",  icon: "🏙️", label: "タウンマスター", desc: "10市区町村制覇",   color: "#10b981", check: s => s.conquest >= 10 },
-  { id: "conq_20",  icon: "🌆", label: "シティハンター",  desc: "20市区町村制覇",   color: "#3b82f6", check: s => s.conquest >= 20 },
-  { id: "conq_50",  icon: "🗾", label: "北関東の覇者",    desc: "50市区町村制覇",   color: "#ec4899", check: s => s.conquest >= 50 },
-  // 開拓者回数
-  { id: "pioneer_1",  icon: "🏴", label: "開拓者",         desc: "初めて新地域を開拓",  color: "#94a3b8", check: s => s.pioneer >= 1 },
-  { id: "pioneer_3",  icon: "⛺", label: "フロンティア",   desc: "3地域を開拓",         color: "#f59e0b", check: s => s.pioneer >= 3 },
-  { id: "pioneer_5",  icon: "🧭", label: "探検家",         desc: "5地域を開拓",         color: "#10b981", check: s => s.pioneer >= 5 },
-  { id: "pioneer_10", icon: "🌍", label: "大航海時代",     desc: "10地域を開拓",        color: "#3b82f6", check: s => s.pioneer >= 10 },
-  { id: "pioneer_20", icon: "🚩", label: "伝説の開拓者",   desc: "20地域を開拓",        color: "#ec4899", check: s => s.pioneer >= 20 },
-  // 活動日数
-  { id: "days_3",   icon: "🌱", label: "新人",         desc: "3日間活動",   color: "#94a3b8", check: s => s.activeDays >= 3 },
-  { id: "days_7",   icon: "🔥", label: "週間戦士",     desc: "7日間活動",   color: "#f59e0b", check: s => s.activeDays >= 7 },
-  { id: "days_14",  icon: "💪", label: "ハードワーカー", desc: "14日間活動", color: "#10b981", check: s => s.activeDays >= 14 },
-  { id: "days_30",  icon: "🏅", label: "月間MVP",      desc: "30日間活動",  color: "#3b82f6", check: s => s.activeDays >= 30 },
-  { id: "days_60",  icon: "🦁", label: "不屈の闘士",   desc: "60日間活動",  color: "#ec4899", check: s => s.activeDays >= 60 },
+  // 投函枚数（6段階）
+  { id: "flyer_500",   category: "投函枚数", catIcon: "📮", rank: 1, icon: "📬", label: "ポスター見習い",   desc: "累計500枚投函",    color: "#94a3b8", check: s => s.totalFlyers >= 500 },
+  { id: "flyer_1000",  category: "投函枚数", catIcon: "📮", rank: 2, icon: "📮", label: "配達人",           desc: "累計1,000枚投函",  color: "#cd7f32", check: s => s.totalFlyers >= 1000 },
+  { id: "flyer_3000",  category: "投函枚数", catIcon: "📮", rank: 3, icon: "📦", label: "ポスタリスト",     desc: "累計3,000枚投函",  color: "#9ca3af", check: s => s.totalFlyers >= 3000 },
+  { id: "flyer_5000",  category: "投函枚数", catIcon: "📮", rank: 4, icon: "🚀", label: "投函マシーン",     desc: "累計5,000枚投函",  color: "#f59e0b", check: s => s.totalFlyers >= 5000 },
+  { id: "flyer_10000", category: "投函枚数", catIcon: "📮", rank: 5, icon: "🌟", label: "レジェンド配達人", desc: "累計10,000枚投函", color: "#a855f7", check: s => s.totalFlyers >= 10000 },
+  { id: "flyer_30000", category: "投函枚数", catIcon: "📮", rank: 6, icon: "👑", label: "投函王",           desc: "累計30,000枚投函", color: "#ec4899", check: s => s.totalFlyers >= 30000 },
+  // 制覇市区町村数（5段階）
+  { id: "conq_1",  category: "市区町村制覇", catIcon: "🏙️", rank: 1, icon: "🏁", label: "第一歩",         desc: "1市区町村制覇",  color: "#94a3b8", check: s => s.conquest >= 1 },
+  { id: "conq_5",  category: "市区町村制覇", catIcon: "🏙️", rank: 2, icon: "🗺️", label: "エリア探検家",   desc: "5市区町村制覇",  color: "#cd7f32", check: s => s.conquest >= 5 },
+  { id: "conq_10", category: "市区町村制覇", catIcon: "🏙️", rank: 3, icon: "🏙️", label: "タウンマスター", desc: "10市区町村制覇", color: "#9ca3af", check: s => s.conquest >= 10 },
+  { id: "conq_20", category: "市区町村制覇", catIcon: "🏙️", rank: 4, icon: "🌆", label: "シティハンター",  desc: "20市区町村制覇", color: "#f59e0b", check: s => s.conquest >= 20 },
+  { id: "conq_50", category: "市区町村制覇", catIcon: "🏙️", rank: 5, icon: "🗾", label: "北関東の覇者",    desc: "50市区町村制覇", color: "#ec4899", check: s => s.conquest >= 50 },
+  // 開拓者回数（5段階）
+  { id: "pioneer_1",  category: "開拓者",  catIcon: "🏴", rank: 1, icon: "🏴", label: "開拓者",       desc: "初めて新地域を開拓", color: "#94a3b8", check: s => s.pioneer >= 1 },
+  { id: "pioneer_3",  category: "開拓者",  catIcon: "🏴", rank: 2, icon: "⛺", label: "フロンティア",  desc: "3地域を開拓",       color: "#cd7f32", check: s => s.pioneer >= 3 },
+  { id: "pioneer_5",  category: "開拓者",  catIcon: "🏴", rank: 3, icon: "🧭", label: "探検家",        desc: "5地域を開拓",       color: "#9ca3af", check: s => s.pioneer >= 5 },
+  { id: "pioneer_10", category: "開拓者",  catIcon: "🏴", rank: 4, icon: "🌍", label: "大航海時代",    desc: "10地域を開拓",      color: "#f59e0b", check: s => s.pioneer >= 10 },
+  { id: "pioneer_20", category: "開拓者",  catIcon: "🏴", rank: 5, icon: "🚩", label: "伝説の開拓者",  desc: "20地域を開拓",      color: "#ec4899", check: s => s.pioneer >= 20 },
+  // 活動日数（5段階）
+  { id: "days_3",  category: "活動日数", catIcon: "📅", rank: 1, icon: "🌱", label: "新人",          desc: "3日間活動",  color: "#94a3b8", check: s => s.activeDays >= 3 },
+  { id: "days_7",  category: "活動日数", catIcon: "📅", rank: 2, icon: "🔥", label: "週間戦士",      desc: "7日間活動",  color: "#cd7f32", check: s => s.activeDays >= 7 },
+  { id: "days_14", category: "活動日数", catIcon: "📅", rank: 3, icon: "💪", label: "ハードワーカー", desc: "14日間活動", color: "#9ca3af", check: s => s.activeDays >= 14 },
+  { id: "days_30", category: "活動日数", catIcon: "📅", rank: 4, icon: "🏅", label: "月間MVP",        desc: "30日間活動", color: "#f59e0b", check: s => s.activeDays >= 30 },
+  { id: "days_60", category: "活動日数", catIcon: "📅", rank: 5, icon: "🦁", label: "不屈の闘士",    desc: "60日間活動", color: "#ec4899", check: s => s.activeDays >= 60 },
 ];
 
 // アカウントの実績からバッジ一覧を返す
@@ -1055,66 +1059,61 @@ function MyBadges({ stats, records, stationLineMunis }) {
               <span style={{ marginLeft: 8, fontSize: 13, color: "#f59e0b", fontWeight: 900 }}>{earnedBadges.length + earnedLineBadges.length}</span>
               <span style={{ fontSize: 12, color: "#475569", fontWeight: 400 }}>個</span>
             </div>
-            {earnedBadges.length === 0 ? (
+            {earnedBadges.length === 0 && earnedLineBadges.length === 0 ? (
               <div style={{ fontSize: 13, color: "#475569", marginTop: 12 }}>まだバッジがありません。活動を続けよう！</div>
             ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
-                {earnedBadges.map(b => (
-                  <div key={b.id} style={{ background: "#0f172a", border: `1px solid ${b.color}44`, borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90 }}>
-                    <div style={{ fontSize: 26, marginBottom: 4 }}>{b.icon}</div>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: b.color }}>{b.label}</div>
-                    <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{b.desc}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
+                {/* カテゴリごとに最高ランクのみ表示 */}
+                {Object.values(earnedBadges.reduce((acc, b) => {
+                  if (!acc[b.category] || b.rank > acc[b.category].rank) acc[b.category] = b;
+                  return acc;
+                }, {})).map(b => {
+                  const rc = RANK_COLORS[b.rank] || "#94a3b8";
+                  return (
+                    <div key={b.id} style={{ background: "linear-gradient(135deg,#0f172a,#1e293b)", border: `1.5px solid ${rc}55`, borderRadius: 14, padding: "14px 12px", textAlign: "center", minWidth: 104 }}>
+                      <div style={{ display: "inline-block", background: rc + "22", border: `1px solid ${rc}66`, color: rc, borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 900, letterSpacing: 0.5, marginBottom: 10 }}>
+                        {RANK_LABELS[b.rank]}
+                      </div>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>{b.catIcon}</div>
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>{b.category}</div>
+                      <div style={{ fontWeight: 700, fontSize: 11, color: rc, lineHeight: 1.3 }}>{b.label}</div>
+                    </div>
+                  );
+                })}
+                {/* 路線制覇バッジ */}
+                {earnedLineBadges.map(b => (
+                  <div key={b.id} style={{ background: "linear-gradient(135deg,#0f172a,#1e293b)", border: "1.5px solid #a855f755", borderRadius: 14, padding: "14px 12px", textAlign: "center", minWidth: 104 }}>
+                    <div style={{ display: "inline-block", background: "#a855f722", border: "1px solid #a855f766", color: "#a855f7", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 900, letterSpacing: 0.5, marginBottom: 10 }}>路線制覇</div>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>🚃</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginBottom: 3 }}>路線</div>
+                    <div style={{ fontWeight: 700, fontSize: 11, color: "#a855f7", lineHeight: 1.3 }}>{b.label}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* 路線制覇バッジ */}
-          <div className="card" style={{ padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>
-              🚃 路線制覇バッジ
-              {earnedLineBadges.length > 0 && (
-                <span style={{ marginLeft: 8, fontSize: 13, color: "#a855f7", fontWeight: 900 }}>{earnedLineBadges.length}路線</span>
-              )}
+          {/* もうすぐ路線制覇 */}
+          {stationLineMunis && nearLineBadges.length > 0 && (
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🚃 もうすぐ路線制覇！</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {nearLineBadges.map(({ lineName, remaining }) => (
+                  <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>
+                    <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
+                    <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
+                    <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
+                    <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            {!stationLineMunis ? (
-              <div style={{ fontSize: 13, color: "#475569", marginTop: 10 }}>
-                🚉 「路線」タブを一度開くとデータが読み込まれます
-              </div>
-            ) : earnedLineBadges.length === 0 && nearLineBadges.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#475569", marginTop: 10 }}>制覇した路線はまだありません</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
-                {earnedLineBadges.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                    {earnedLineBadges.map(b => (
-                      <div key={b.id} style={{ background: "#0f172a", border: `1px solid #a855f744`, borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90 }}>
-                        <div style={{ fontSize: 26, marginBottom: 4 }}>🚃</div>
-                        <div style={{ fontWeight: 700, fontSize: 12, color: "#a855f7" }}>{b.label}</div>
-                        <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{b.desc}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {nearLineBadges.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>🎯 もうすぐ制覇！</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {nearLineBadges.map(({ lineName, total, remaining }) => (
-                        <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>
-                          <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
-                          <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
-                          <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
-                          <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )}
+          {!stationLineMunis && (
+            <div className="card" style={{ padding: 16, fontSize: 13, color: "#475569" }}>
+              🚉 「路線」タブを一度開くと路線制覇バッジが解放されます
+            </div>
+          )}
 
           {/* 次のバッジまでの進捗 */}
           <div className="card" style={{ padding: 20 }}>
@@ -1168,21 +1167,39 @@ function MyBadges({ stats, records, stationLineMunis }) {
             </div>
           </div>
 
-          {/* 未獲得バッジ */}
-          {notEarnedBadges.length > 0 && (
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#475569", marginBottom: 14 }}>🔒 未獲得バッジ</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                {notEarnedBadges.map(b => (
-                  <div key={b.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90, opacity: 0.5 }}>
-                    <div style={{ fontSize: 26, marginBottom: 4, filter: "grayscale(1)" }}>{b.icon}</div>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: "#475569" }}>{b.label}</div>
-                    <div style={{ fontSize: 10, color: "#334155", marginTop: 2 }}>{b.desc}</div>
-                  </div>
-                ))}
+          {/* 次の目標バッジ（カテゴリごとに次のランクのみ） */}
+          {(() => {
+            const earnedByCategory = earnedBadges.reduce((acc, b) => {
+              if (!acc[b.category] || b.rank > acc[b.category].rank) acc[b.category] = b;
+              return acc;
+            }, {});
+            const nextBadges = BADGE_DEFS.filter(b => {
+              const top = earnedByCategory[b.category];
+              return b.rank === (top ? top.rank + 1 : 1);
+            });
+            if (nextBadges.length === 0) return null;
+            return (
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#475569", marginBottom: 14 }}>🔒 次の目標バッジ</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  {nextBadges.map(b => {
+                    const rc = RANK_COLORS[b.rank] || "#475569";
+                    return (
+                      <div key={b.id} style={{ background: "#0f172a", border: "1.5px solid #1e293b", borderRadius: 14, padding: "14px 12px", textAlign: "center", minWidth: 104, opacity: 0.55 }}>
+                        <div style={{ display: "inline-block", background: "#1e293b", border: "1px solid #334155", color: "#475569", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 900, letterSpacing: 0.5, marginBottom: 10 }}>
+                          🔒 {RANK_LABELS[b.rank]}
+                        </div>
+                        <div style={{ fontSize: 28, filter: "grayscale(1)", marginBottom: 6 }}>{b.catIcon}</div>
+                        <div style={{ fontSize: 10, color: "#475569", marginBottom: 3 }}>{b.category}</div>
+                        <div style={{ fontWeight: 700, fontSize: 11, color: "#475569", lineHeight: 1.3 }}>{b.label}</div>
+                        <div style={{ fontSize: 9, color: "#334155", marginTop: 4 }}>{b.desc}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </>
       )}
     </div>
