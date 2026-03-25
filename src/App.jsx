@@ -351,6 +351,17 @@ function calcBadges(memberStats) {
   return BADGE_DEFS.filter(b => b.check(memberStats));
 }
 
+// 路線制覇バッジを動的生成
+function calcLineBadges(completedLines) {
+  return [...(completedLines || [])].sort().map(lineName => ({
+    id: `line_${lineName}`,
+    icon: "🚃",
+    label: `${lineName}の主`,
+    desc: `${lineName}沿線の全市区町村を制覇`,
+    color: "#a855f7",
+  }));
+}
+
 // ============================================================
 // Main App
 // ============================================================
@@ -359,6 +370,7 @@ export default function PostingApp() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mapExpandedPref, setMapExpandedPref] = useState(null);
+  const [stationLineMunis, setStationLineMunis] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -483,18 +495,35 @@ export default function PostingApp() {
 
     // メンバーごとのバッジ計算
     const allMemberNames = [...new Set(records.map(r => r.memberName))];
+    const muniIdToName = {};
+    for (const m of MUNICIPALITIES_DATA) muniIdToName[m.id] = m.name;
+
     const memberBadges = {};
     for (const name of allMemberNames) {
-      memberBadges[name] = calcBadges({
+      const ms = {
         totalFlyers: memberMap[name] || 0,
         conquest: conquestMap[name]?.size || 0,
         pioneer: pioneerCountMap[name] || 0,
         activeDays: activeDaysMap[name]?.size || 0,
-      });
+      };
+      const staticBadges = calcBadges(ms);
+      let lineBadges = [];
+      if (stationLineMunis) {
+        const conqueredNames = new Set(
+          [...(conquestMap[name] || [])].map(id => muniIdToName[id]).filter(Boolean)
+        );
+        const completedLines = new Set(
+          Object.entries(stationLineMunis)
+            .filter(([, munis]) => [...munis].every(m => conqueredNames.has(m)))
+            .map(([line]) => line)
+        );
+        lineBadges = calcLineBadges(completedLines);
+      }
+      memberBadges[name] = [...staticBadges, ...lineBadges];
     }
 
     return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking, memberBadges };
-  }, [records]);
+  }, [records, stationLineMunis]);
 
   // トースト通知
   const [toast, setToast] = useState(null); // { message, color }
@@ -618,11 +647,11 @@ export default function PostingApp() {
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
             {tab === "ranking" && <Ranking stats={stats} />}
-            {tab === "mybadges" && <MyBadges stats={stats} records={records} />}
+            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
-                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} />
+                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={setStationLineMunis} />
               </Suspense>
             )}
             {tab === "list" && <MuniList stats={stats} />}
@@ -918,7 +947,7 @@ const BADGE_NEXT_DEFS = [
   },
 ];
 
-function MyBadges({ stats, records }) {
+function MyBadges({ stats, records, stationLineMunis }) {
   const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
   const [selectedName, setSelectedName] = useState("");
   const [showSuggest, setShowSuggest] = useState(false);
@@ -936,14 +965,48 @@ function MyBadges({ stats, records }) {
     if (myRecords.length === 0) return null;
 
     const totalFlyers = myRecords.reduce((s, r) => s + r.flyerCount, 0);
-    const conquest = new Set(myRecords.map(r => r.municipalityId)).size;
+    const conqueredIds = new Set(myRecords.map(r => r.municipalityId));
+    const conquest = conqueredIds.size;
     const activeDays = new Set(myRecords.map(r => r.postedDate)).size;
     const pioneer = stats.pioneerRanking.find(p => p.name === name)?.count || 0;
-    return { totalFlyers, conquest, activeDays, pioneer };
-  }, [selectedName, records, stats.pioneerRanking]);
+
+    // 路線制覇チェック
+    let completedLines = new Set();
+    if (stationLineMunis) {
+      const conqueredNames = new Set(
+        [...conqueredIds].map(id => MUNICIPALITIES_DATA.find(m => m.id === id)?.name).filter(Boolean)
+      );
+      completedLines = new Set(
+        Object.entries(stationLineMunis)
+          .filter(([, munis]) => [...munis].every(m => conqueredNames.has(m)))
+          .map(([line]) => line)
+      );
+    }
+
+    return { totalFlyers, conquest, activeDays, pioneer, completedLines };
+  }, [selectedName, records, stats.pioneerRanking, stationLineMunis]);
 
   const earnedBadges = memberStats ? calcBadges(memberStats) : [];
+  const earnedLineBadges = memberStats ? calcLineBadges(memberStats.completedLines) : [];
   const notEarnedBadges = memberStats ? BADGE_DEFS.filter(b => !b.check(memberStats)) : [];
+
+  // 路線制覇まであと少しリスト（残り市区町村数が少ない路線）
+  const nearLineBadges = useMemo(() => {
+    if (!stationLineMunis || !memberStats) return [];
+    const conqueredIds = new Set(
+      records.filter(r => r.memberName === selectedName.trim()).map(r => r.municipalityId)
+    );
+    const conqueredNames = new Set(
+      [...conqueredIds].map(id => MUNICIPALITIES_DATA.find(m => m.id === id)?.name).filter(Boolean)
+    );
+    return Object.entries(stationLineMunis)
+      .map(([lineName, munis]) => {
+        const remaining = [...munis].filter(m => !conqueredNames.has(m));
+        return { lineName, total: munis.size, remaining };
+      })
+      .filter(l => l.remaining.length > 0 && l.remaining.length <= 3)
+      .sort((a, b) => a.remaining.length - b.remaining.length);
+  }, [stationLineMunis, memberStats, records, selectedName]);
 
   return (
     <div style={{ maxWidth: 700, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -989,8 +1052,8 @@ function MyBadges({ stats, records }) {
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>
               ✨ 獲得済みバッジ
-              <span style={{ marginLeft: 8, fontSize: 13, color: "#f59e0b", fontWeight: 900 }}>{earnedBadges.length}</span>
-              <span style={{ fontSize: 12, color: "#475569", fontWeight: 400 }}>/{BADGE_DEFS.length}個</span>
+              <span style={{ marginLeft: 8, fontSize: 13, color: "#f59e0b", fontWeight: 900 }}>{earnedBadges.length + earnedLineBadges.length}</span>
+              <span style={{ fontSize: 12, color: "#475569", fontWeight: 400 }}>個</span>
             </div>
             {earnedBadges.length === 0 ? (
               <div style={{ fontSize: 13, color: "#475569", marginTop: 12 }}>まだバッジがありません。活動を続けよう！</div>
@@ -1003,6 +1066,52 @@ function MyBadges({ stats, records }) {
                     <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{b.desc}</div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* 路線制覇バッジ */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>
+              🚃 路線制覇バッジ
+              {earnedLineBadges.length > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 13, color: "#a855f7", fontWeight: 900 }}>{earnedLineBadges.length}路線</span>
+              )}
+            </div>
+            {!stationLineMunis ? (
+              <div style={{ fontSize: 13, color: "#475569", marginTop: 10 }}>
+                🚉 「路線」タブを一度開くとデータが読み込まれます
+              </div>
+            ) : earnedLineBadges.length === 0 && nearLineBadges.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#475569", marginTop: 10 }}>制覇した路線はまだありません</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+                {earnedLineBadges.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                    {earnedLineBadges.map(b => (
+                      <div key={b.id} style={{ background: "#0f172a", border: `1px solid #a855f744`, borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 90 }}>
+                        <div style={{ fontSize: 26, marginBottom: 4 }}>🚃</div>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: "#a855f7" }}>{b.label}</div>
+                        <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>{b.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {nearLineBadges.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>🎯 もうすぐ制覇！</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {nearLineBadges.map(({ lineName, total, remaining }) => (
+                        <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>
+                          <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
+                          <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
+                          <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
+                          <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

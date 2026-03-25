@@ -39,7 +39,7 @@ function muniName({ N03_003, N03_004 }) {
 // ============================================================
 // StationTab コンポーネント
 // ============================================================
-export default function StationTab({ stats, municipalities }) {
+export default function StationTab({ stats, municipalities, onDataLoaded }) {
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -136,6 +136,16 @@ export default function StationTab({ stats, municipalities }) {
             posted: postedIds.has(id),
           });
         }
+      }
+
+      // 路線 → 市区町村マップを親に通知（路線制覇バッジ用）
+      if (onDataLoaded) {
+        const lineMuniMap = {};
+        for (const s of result) {
+          if (!lineMuniMap[s.line]) lineMuniMap[s.line] = new Set();
+          lineMuniMap[s.line].add(s.municipality);
+        }
+        onDataLoaded(lineMuniMap);
       }
 
       setEnriched(result);
