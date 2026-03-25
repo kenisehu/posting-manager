@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 // ============================================================
 // GeoJSON データ URL（4県）
@@ -39,13 +39,27 @@ function muniName({ N03_003, N03_004 }) {
 // ============================================================
 // StationTab コンポーネント
 // ============================================================
-export default function StationTab({ stats, municipalities, onDataLoaded }) {
+export default function StationTab({ stats, municipalities, onDataLoaded, initialLine, onInitialLineApplied }) {
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedLine, setSelectedLine] = useState(null);
   const [lineSearch, setLineSearch] = useState("");
   const [showPosted, setShowPosted] = useState(false);
+  const pendingLineRef = useRef(null);
+
+  // 外部から路線を指定された時の処理
+  useEffect(() => {
+    if (!initialLine) return;
+    pendingLineRef.current = initialLine;
+    onInitialLineApplied?.();
+    if (loadState === "idle") {
+      load();
+    } else if (loadState === "ready") {
+      setSelectedLine(initialLine);
+      pendingLineRef.current = null;
+    }
+  }, [initialLine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── データ読み込み ──────────────────────────────────────────
   const load = () => {
@@ -150,6 +164,10 @@ export default function StationTab({ stats, municipalities, onDataLoaded }) {
 
       setEnriched(result);
       setLoadState("ready");
+      if (pendingLineRef.current) {
+        setSelectedLine(pendingLineRef.current);
+        pendingLineRef.current = null;
+      }
     }).catch(e => {
       setErrorMsg(String(e));
       setLoadState("error");
@@ -171,7 +189,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded }) {
     return Object.entries(map)
       .filter(([, v]) => v.unposted > 0)
       .map(([name, v]) => ({ name, total: v.total, unposted: v.unposted, muniCount: v.munis.size }))
-      .sort((a, b) => b.unposted - a.unposted);
+      .sort((a, b) => b.muniCount - a.muniCount || b.unposted - a.unposted);
   }, [enriched]);
 
   const filteredLineList = useMemo(() => {

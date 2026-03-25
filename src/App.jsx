@@ -375,6 +375,7 @@ export default function PostingApp() {
   const [loading, setLoading] = useState(true);
   const [mapExpandedPref, setMapExpandedPref] = useState(null);
   const [stationLineMunis, setStationLineMunis] = useState(null);
+  const [stationInitialLine, setStationInitialLine] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -651,11 +652,11 @@ export default function PostingApp() {
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
             {tab === "ranking" && <Ranking stats={stats} />}
-            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} />}
+            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
-                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={setStationLineMunis} />
+                <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={setStationLineMunis} initialLine={stationInitialLine} onInitialLineApplied={() => setStationInitialLine(null)} />
               </Suspense>
             )}
             {tab === "list" && <MuniList stats={stats} />}
@@ -951,7 +952,7 @@ const BADGE_NEXT_DEFS = [
   },
 ];
 
-function MyBadges({ stats, records, stationLineMunis }) {
+function MyBadges({ stats, records, stationLineMunis, onLineClick }) {
   const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
   const [selectedName, setSelectedName] = useState("");
   const [showSuggest, setShowSuggest] = useState(false);
@@ -1099,11 +1100,20 @@ function MyBadges({ stats, records, stationLineMunis }) {
               <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🚃 もうすぐ路線制覇！</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {nearLineBadges.map(({ lineName, remaining }) => (
-                  <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>
-                    <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
-                    <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
-                    <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
-                    <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
+                  <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
+                      <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
+                      <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
+                      <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
+                    </div>
+                    <button onClick={() => onLineClick?.(lineName)} style={{
+                      background: "#1e293b", border: "1px solid #a855f755", color: "#a855f7",
+                      borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                    }}>
+                      路線を見る →
+                    </button>
                   </div>
                 ))}
               </div>
