@@ -196,7 +196,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
               stroke="#9aacbf"
               strokeWidth={0.4}
               style={{ cursor: "pointer" }}
-              onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
+              onClick={() => onClickPref(f.pref)}
               onMouseMove={(e) => handleMouseMove(e, f)}
               onMouseLeave={handleMouseLeave}
             />
@@ -466,7 +466,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* 操作ヒント */}
       <div style={{ fontSize: 12, color: "#64748b" }}>
-        地図上の市区町村をクリックすると、その都道府県を拡大表示できます。
+        地図をタップ → 都道府県を拡大 → 市区町村をタップ → 利用できる駅を確認
       </div>
 
       {/* 合体地図 */}
