@@ -621,6 +621,21 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 url: "https://www.chichibu-railway.co.jp/information/couponpass.html",
                 match: s => s.includes("秩父鉄道"),
               },
+              {
+                name: "関東鉄道のフリーきっぷ",
+                url: "https://www.kantetsu.co.jp/train/special-ticket",
+                match: s => ["常総線","真岡鐵道","竜ヶ崎線","関東鉄道"].some(k => s.includes(k)),
+              },
+              {
+                name: "宇都宮ライトレールのフリーきっぷ",
+                url: "https://www.miyarail.co.jp/cms/wp-content/uploads/2024/01/sample%EF%BC%88%E3%83%81%E3%83%A9%E3%82%B7%EF%BC%89.pdf",
+                match: s => s.includes("ライトレール") || s.includes("宇都宮芳賀"),
+              },
+              {
+                name: "つくばエクスプレスのフリーきっぷ",
+                url: "https://www.mir.co.jp/service/otoku/",
+                match: s => s.includes("つくばエクスプレス") || s.includes("TX"),
+              },
             ];
 
             const matched = FREE_PASSES.filter(p => p.match(l));
