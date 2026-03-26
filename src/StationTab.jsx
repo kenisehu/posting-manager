@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 const TRANSIT_CACHE_KEY = "transit_time_cache_v2";
 
-// Vercel serverless 経由で乗換時間（分）を取得
-async function getTransitMinutes(originName, destName) {
+// Vercel serverless 経由で乗換時間（分）を取得（座標指定）
+async function getTransitMinutes(originLat, originLon, destLat, destLon) {
   try {
-    const res = await fetch(`/api/transit?origin=${encodeURIComponent(originName)}&destination=${encodeURIComponent(destName)}`);
+    const res = await fetch(
+      `/api/transit?origin_lat=${originLat}&origin_lon=${originLon}&dest_lat=${destLat}&dest_lon=${destLon}`
+    );
     const data = await res.json();
     if (data.status === "OK" && data.routes?.[0]) {
       return { mins: data.routes[0].legs[0].duration.value / 60, status: "OK" };
@@ -300,7 +302,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           const cKey = `${nearestStation.name}→${t.station}`;
           let cached = cache[cKey];
           if (cached === undefined) {
-            const { mins, status } = await getTransitMinutes(nearestStation.name, t.station);
+            const { mins, status } = await getTransitMinutes(nearestStation.lat, nearestStation.lon, t.lat, t.lon);
             if (mins !== null) { cache[cKey] = mins; cached = mins; }
             else { setDebugStatus(s => s || status); }
           }
