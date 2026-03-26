@@ -24,15 +24,14 @@ function loadMapsAPI(apiKey) {
   });
 }
 
-// Directions API で乗換時間（分）を取得（10秒タイムアウト付き）
-function getTransitMinutes(ds, oLat, oLon, dLat, dLon) {
+// Directions API で乗換時間（分）を取得（駅名で検索・10秒タイムアウト付き）
+function getTransitMinutes(ds, originName, destName) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 10000);
     ds.route({
-      origin: { lat: oLat, lng: oLon },
-      destination: { lat: dLat, lng: dLon },
+      origin: originName + "駅",
+      destination: destName + "駅",
       travelMode: window.google.maps.TravelMode.TRANSIT,
-      transitOptions: { departureTime: new Date() },
     }, (result, status) => {
       clearTimeout(timer);
       if (status === "OK" && result?.routes?.[0]) {
@@ -429,7 +428,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           const cKey = `${nearestStation.name}→${t.station}`;
           let mins = cache[cKey];
           if (mins === undefined) {
-            mins = await getTransitMinutes(ds, nearestStation.lat, nearestStation.lon, t.lat, t.lon);
+            mins = await getTransitMinutes(ds, nearestStation.name, t.station);
             if (mins !== null) cache[cKey] = mins;
           }
           return mins != null ? { ...t, mins: Math.round(mins) } : null;
