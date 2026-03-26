@@ -585,10 +585,9 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
               }}>
                 {nearestSuggestions.map(stn => (
-                  <div key={stn.name} onMouseDown={() => { setNearestStation(stn); setNearestInput(stn.name); setShowNearestSuggest(false); }}
+                  <div key={stn.name}
+                    onPointerDown={() => { setNearestStation(stn); setNearestInput(stn.name); setShowNearestSuggest(false); }}
                     style={{ padding: "11px 14px", cursor: "pointer", fontSize: 14, color: "#e2e8f0", borderBottom: "1px solid #0f172a" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#334155"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
                     🚉 {stn.name}
                   </div>
@@ -603,6 +602,13 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
               <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
               <div>乗換時間を検索中...</div>
               <div style={{ fontSize: 11, marginTop: 6 }}>Google Maps で経路を確認しています</div>
+            </div>
+          )}
+          {nearestStation && !transitLoading && transitResults.length === 0 && mapsAPIReady && (
+            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🚫</div>
+              <div>乗換ルートが見つかりませんでした</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>別の駅で試してみてください</div>
             </div>
           )}
           {nearestStation && !transitLoading && transitResults.length === 0 && !mapsAPIReady && (
