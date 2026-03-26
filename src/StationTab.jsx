@@ -12,7 +12,7 @@ async function getTransitMinutes(originLat, originLon, destLat, destLon) {
     if (data.status === "OK" && data.routes?.[0]) {
       return { mins: data.routes[0].legs[0].duration.value / 60, status: "OK" };
     }
-    const detail = data.error_message || (data.geocoded_waypoints ? JSON.stringify(data.geocoded_waypoints) : "");
+    const detail = JSON.stringify(data._debug || data.error_message || "");
     return { mins: null, status: data.status || "ERROR", detail };
   } catch (e) {
     return { mins: null, status: "FETCH_ERROR", detail: e.message };
