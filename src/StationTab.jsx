@@ -584,13 +584,44 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
 
           {/* フリーきっぷリンク */}
           {(() => {
-            const JR_KEYWORDS = ["東北本線","高崎線","水戸線","常磐線","宇都宮線","両毛線",
-              "八高線","川越線","武蔵野線","埼京線","湘南新宿","上越線","信越本線",
-              "烏山線","水郡線","日光線","東北新幹線","上越新幹線","北陸新幹線","JR"];
-            const isJR = JR_KEYWORDS.some(k => selectedLine.includes(k));
-            const href = isJR
-              ? "https://www.jreast.co.jp/tokyo/tickets_otoku/"
-              : `https://www.google.com/search?q=${encodeURIComponent(selectedLine + " フリーきっぷ")}`;
+            // のんびりホリデーSuicaパス フリーエリア内のJR路線
+            const JR_PASS_IN_AREA = [
+              "高崎線","宇都宮線","東北本線","埼京線","川越線","武蔵野線","八高線",
+              "常磐線","湘南新宿","京浜東北","山手線","中央線","総武線","横浜線",
+              "南武線","根岸線","横須賀線","成田線","外房線","内房線","鶴見線",
+            ];
+            // フリーエリア外のJR路線（Google検索に戻す）
+            const JR_PASS_OUT_AREA = [
+              "水戸線","両毛線","日光線","烏山線","水郡線","上越線","信越本線",
+              "東北新幹線","上越新幹線","北陸新幹線",
+            ];
+            // 西武：秩父線・多摩川線は除外
+            const isSeibuExcluded = ["西武秩父線","多摩川線"].some(k => selectedLine.includes(k));
+            const isSeibu = !isSeibuExcluded && selectedLine.includes("西武");
+            const isTobu = selectedLine.includes("東武");
+            const isChichibu = selectedLine.includes("秩父鉄道");
+            const isJRPass = JR_PASS_IN_AREA.some(k => selectedLine.includes(k));
+            const isJROutArea = JR_PASS_OUT_AREA.some(k => selectedLine.includes(k));
+
+            let href, label;
+            if (isTobu) {
+              href = "https://www.tobu.co.jp/odekake/ticket/";
+              label = "東武線のフリーきっぷを見る";
+            } else if (isSeibu) {
+              href = "https://www.seiburailway.jp/railway/ticket/specialticket/doraemon_kaitei-kiganjou/";
+              label = "西武線のフリーきっぷを見る";
+            } else if (isChichibu) {
+              href = "https://www.chichibu-railway.co.jp/information/couponpass.html";
+              label = "秩父鉄道のフリーきっぷを見る";
+            } else if (isJRPass) {
+              href = "https://www.jreast.co.jp/tokyo/tickets_otoku/";
+              label = `${selectedLine} のフリーきっぷを見る`;
+            } else {
+              // JRフリーエリア外 or その他私鉄 → Google検索
+              href = `https://www.google.com/search?q=${encodeURIComponent(selectedLine + " フリーきっぷ")}`;
+              label = `${selectedLine} のフリーきっぷを検索`;
+            }
+
             return (
               <a href={href} target="_blank" rel="noopener noreferrer" style={{
                 display: "flex", alignItems: "center", gap: 8,
@@ -598,7 +629,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 background: "#1e293b", border: "1px solid #334155",
                 borderRadius: 10, textDecoration: "none", color: "#38bdf8", fontSize: 13, fontWeight: 600,
               }}>
-                🎫 {selectedLine} のフリーきっぷを{isJR ? "見る" : "検索"}
+                🎫 {label}
                 <span style={{ marginLeft: "auto", fontSize: 16, color: "#475569" }}>›</span>
               </a>
             );
