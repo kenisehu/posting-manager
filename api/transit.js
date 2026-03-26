@@ -4,15 +4,13 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "API key not configured" });
   if (!origin_lat || !dest_lat) return res.status(400).json({ error: "coordinates required" });
 
-  const originStr = `${origin_lat},${origin_lon}`;
-  const destStr = `${dest_lat},${dest_lon}`;
-  // 5分後の Unix タイムスタンプ（transit には未来時刻が必要な場合がある）
   const departureTime = Math.floor(Date.now() / 1000) + 300;
 
+  // Distance Matrix API で transit 所要時間を取得
   const url =
-    `https://maps.googleapis.com/maps/api/directions/json` +
-    `?origin=${originStr}` +
-    `&destination=${destStr}` +
+    `https://maps.googleapis.com/maps/api/distancematrix/json` +
+    `?origins=${origin_lat},${origin_lon}` +
+    `&destinations=${dest_lat},${dest_lon}` +
     `&mode=transit` +
     `&departure_time=${departureTime}` +
     `&region=jp` +
@@ -22,8 +20,17 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(url);
     const data = await response.json();
-    data._debug = { originStr, destStr, status: data.status };
-    res.json(data);
+
+    // Distance Matrix のレスポンスを Directions API 互換の形に変換
+    const element = data.rows?.[0]?.elements?.[0];
+    if (element?.status === "OK") {
+      return res.json({
+        status: "OK",
+        routes: [{ legs: [{ duration: { value: element.duration.value } }] }],
+      });
+    }
+
+    res.json({ status: element?.status || data.status || "ERROR", _debug: { element, topStatus: data.status } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
