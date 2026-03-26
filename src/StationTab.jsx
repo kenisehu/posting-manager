@@ -27,7 +27,7 @@ function loadMapsAPI(apiKey) {
 // Directions API で乗換時間（分）を取得（駅名で検索・10秒タイムアウト付き）
 function getTransitMinutes(ds, originName, destName) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), 10000);
+    const timer = setTimeout(() => resolve({ mins: null, status: "TIMEOUT" }), 10000);
     ds.route({
       origin: originName + "駅",
       destination: destName + "駅",
@@ -35,9 +35,9 @@ function getTransitMinutes(ds, originName, destName) {
     }, (result, status) => {
       clearTimeout(timer);
       if (status === "OK" && result?.routes?.[0]) {
-        resolve(result.routes[0].legs[0].duration.value / 60);
+        resolve({ mins: result.routes[0].legs[0].duration.value / 60, status });
       } else {
-        resolve(null);
+        resolve({ mins: null, status });
       }
     });
   });
@@ -193,6 +193,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   const [mapsAPIReady, setMapsAPIReady] = useState(false);
   const [transitResults, setTransitResults] = useState([]);
   const [transitLoading, setTransitLoading] = useState(false);
+  const [debugStatus, setDebugStatus] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedLine, setSelectedLine] = useState(null);
   const [lineSearch, setLineSearch] = useState("");
@@ -398,6 +399,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     let cancelled = false;
     setTransitLoading(true);
     setTransitResults([]);
+    setDebugStatus(null);
 
     (async () => {
       const cache = (() => { try { return JSON.parse(localStorage.getItem(TRANSIT_CACHE_KEY) || "{}"); } catch { return {}; } })();
@@ -426,12 +428,15 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
         const batch = targets.slice(i, i + 5);
         const batchRes = await Promise.all(batch.map(async (t) => {
           const cKey = `${nearestStation.name}→${t.station}`;
-          let mins = cache[cKey];
-          if (mins === undefined) {
-            mins = await getTransitMinutes(ds, nearestStation.name, t.station);
-            if (mins !== null) cache[cKey] = mins;
+          let cached = cache[cKey];
+          if (cached === undefined) {
+            const { mins, status } = await getTransitMinutes(ds, nearestStation.name, t.station);
+            if (mins !== null) { cache[cKey] = mins; cached = mins; }
+            else { setDebugStatus(s => s || status); }
+          } else {
+            cached = cached;
           }
-          return mins != null ? { ...t, mins: Math.round(mins) } : null;
+          return cached != null ? { ...t, mins: Math.round(cached) } : null;
         }));
         results.push(...batchRes.filter(Boolean));
         // 途中経過を表示
@@ -607,7 +612,12 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
             <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚫</div>
               <div>乗換ルートが見つかりませんでした</div>
-              <div style={{ fontSize: 11, marginTop: 4 }}>別の駅で試してみてください</div>
+              {debugStatus && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#f87171", background: "#1e293b", borderRadius: 6, padding: "6px 12px", display: "inline-block" }}>
+                  エラー: {debugStatus}
+                </div>
+              )}
+              <div style={{ fontSize: 11, marginTop: 8, color: "#475569" }}>別の駅で試してみてください</div>
             </div>
           )}
           {nearestStation && !transitLoading && transitResults.length === 0 && !mapsAPIReady && (
