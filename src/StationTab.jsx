@@ -86,9 +86,12 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       ...Object.values(PREF_GEOJSON_URLS).map(url => fetch(url).then(r => r.json())),
     ]).then(([stationsAll, linesAll, ...geos]) => {
 
-      // 全国駅リスト（最寄り駅入力用）
+      // 対象県＋近接県の駅リスト（最寄り駅入力用）
+      // 4県(8-11) + 福島(7)・長野(20)・新潟(15)・山梨(19)・千葉(12)・東京(13)・神奈川(14)
+      const NEARBY_PREFS = new Set([7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20]);
       const stationByName = {};
       for (const group of stationsAll) {
+        if (!NEARBY_PREFS.has(Number(group.prefecture))) continue;
         for (const s of group.stations) {
           const name = s.name_kanji || group.name_kanji;
           if (name && s.lat && s.lon && !stationByName[name]) {
