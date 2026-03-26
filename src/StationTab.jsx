@@ -45,30 +45,28 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 路線の駅順を最近傍法で再構築（北端スタート）
+// 路線の駅順をPCA（主成分分析）で再構築
+// 最近傍法より直線的な路線で正確。分岐・環状線には限界あり
 function reconstructLineOrder(stations) {
-  if (stations.length <= 1) return stations;
-  const visited = new Array(stations.length).fill(false);
-  let si = 0;
-  for (let i = 1; i < stations.length; i++) {
-    if (stations[i].lat > stations[si].lat) si = i;
+  if (stations.length <= 2) return stations;
+  const n = stations.length;
+  const mLat = stations.reduce((s, x) => s + x.lat, 0) / n;
+  const mLon = stations.reduce((s, x) => s + x.lon, 0) / n;
+  let cll = 0, cln = 0, cnn = 0;
+  for (const s of stations) {
+    const dl = s.lat - mLat, dn = s.lon - mLon;
+    cll += dl * dl; cln += dl * dn; cnn += dn * dn;
   }
-  const ordered = [stations[si]];
-  visited[si] = true;
-  while (ordered.length < stations.length) {
-    const last = ordered[ordered.length - 1];
-    let minD = Infinity, ni = -1;
-    for (let i = 0; i < stations.length; i++) {
-      if (visited[i]) continue;
-      const dl = last.lat - stations[i].lat, dn = last.lon - stations[i].lon;
-      const d = dl * dl + dn * dn;
-      if (d < minD) { minD = d; ni = i; }
-    }
-    if (ni === -1) break;
-    ordered.push(stations[ni]);
-    visited[ni] = true;
-  }
-  return ordered;
+  // 2x2共分散行列の最大固有値に対応する固有ベクトル
+  const tr = cll + cnn;
+  const det = cll * cnn - cln * cln;
+  const lam = (tr + Math.sqrt(Math.max(0, tr * tr - 4 * det))) / 2;
+  const evLat = cln || 1, evLon = lam - cll;
+  return [...stations].sort((a, b) => {
+    const pa = (a.lat - mLat) * evLat + (a.lon - mLon) * evLon;
+    const pb = (b.lat - mLat) * evLat + (b.lon - mLon) * evLon;
+    return pa - pb;
+  });
 }
 
 // 駅グラフ構築：同路線隣接 + 乗換エッジ
@@ -355,15 +353,17 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
 
     const dist = dijkstra(adj, startKeys);
 
+    const { lat: sLat, lon: sLon } = nearestStation;
     const muniClosest = {};
     for (const s of enriched) {
-      if (s.posted) continue;
+      if (s.posted || !s.lat || !s.lon) continue;
       const keys = nameToKeys[s.station] || [];
       let minTime = Infinity;
       for (const k of keys) { const t = dist[k] ?? Infinity; if (t < minTime) minTime = t; }
       if (minTime === Infinity) continue;
+      const km = haversine(sLat, sLon, s.lat, s.lon);
       if (!muniClosest[s.municipality] || minTime < muniClosest[s.municipality].time) {
-        muniClosest[s.municipality] = { time: minTime, station: s.station, line: s.line };
+        muniClosest[s.municipality] = { time: minTime, station: s.station, line: s.line, km };
       }
     }
     return Object.entries(muniClosest)
@@ -552,12 +552,17 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                         🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
                       </div>
                     </div>
-                    <div style={{
-                      fontSize: 13, fontWeight: 700, color,
-                      background: color + "22", borderRadius: 8, padding: "4px 10px",
-                      whiteSpace: "nowrap",
-                    }}>
-                      約{mins}分
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 700, color,
+                        background: color + "22", borderRadius: 6, padding: "3px 9px",
+                        whiteSpace: "nowrap",
+                      }}>
+                        🚃 約{mins}分
+                      </div>
+                      <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
+                        🚗 約{r.km.toFixed(1)}km
+                      </div>
                     </div>
                   </div>
                 );
