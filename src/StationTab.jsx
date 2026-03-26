@@ -1,46 +1,19 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
-// Google Maps API キー（.env.local で管理）
-const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const TRANSIT_CACHE_KEY = "transit_time_cache_v2";
 
-// Google Maps JS API を動的ロード（callback方式で確実に初期化を待つ）
-function loadMapsAPI(apiKey) {
-  return new Promise((resolve, reject) => {
-    if (window.google?.maps?.DirectionsService) { resolve(); return; }
-    // 既にスクリプト追加済みなら初期化を待つ
-    if (document.querySelector("script[data-gmaps]")) {
-      const t = setInterval(() => { if (window.google?.maps?.DirectionsService) { clearInterval(t); resolve(); } }, 200);
-      setTimeout(() => { clearInterval(t); reject(new Error("timeout")); }, 15000);
-      return;
+// Vercel serverless 経由で乗換時間（分）を取得
+async function getTransitMinutes(originName, destName) {
+  try {
+    const res = await fetch(`/api/transit?origin=${encodeURIComponent(originName)}&destination=${encodeURIComponent(destName)}`);
+    const data = await res.json();
+    if (data.status === "OK" && data.routes?.[0]) {
+      return { mins: data.routes[0].legs[0].duration.value / 60, status: "OK" };
     }
-    const cb = "_gmInit_" + Date.now();
-    window[cb] = () => { resolve(); delete window[cb]; };
-    const s = document.createElement("script");
-    s.setAttribute("data-gmaps", "1");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cb}&loading=async`;
-    s.onerror = () => reject(new Error("Google Maps API の読み込みに失敗しました"));
-    document.head.appendChild(s);
-  });
-}
-
-// Directions API で乗換時間（分）を取得（駅名で検索・10秒タイムアウト付き）
-function getTransitMinutes(ds, originName, destName) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve({ mins: null, status: "TIMEOUT" }), 10000);
-    ds.route({
-      origin: originName + "駅",
-      destination: destName + "駅",
-      travelMode: window.google.maps.TravelMode.TRANSIT,
-    }, (result, status) => {
-      clearTimeout(timer);
-      if (status === "OK" && result?.routes?.[0]) {
-        resolve({ mins: result.routes[0].legs[0].duration.value / 60, status });
-      } else {
-        resolve({ mins: null, status });
-      }
-    });
-  });
+    return { mins: null, status: data.status || "ERROR" };
+  } catch (e) {
+    return { mins: null, status: "FETCH_ERROR" };
+  }
 }
 
 // ============================================================
@@ -88,101 +61,6 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 路線の駅順をPCA（主成分分析）で再構築
-// 最近傍法より直線的な路線で正確。分岐・環状線には限界あり
-function reconstructLineOrder(stations) {
-  if (stations.length <= 2) return stations;
-  const n = stations.length;
-  const mLat = stations.reduce((s, x) => s + x.lat, 0) / n;
-  const mLon = stations.reduce((s, x) => s + x.lon, 0) / n;
-  let cll = 0, cln = 0, cnn = 0;
-  for (const s of stations) {
-    const dl = s.lat - mLat, dn = s.lon - mLon;
-    cll += dl * dl; cln += dl * dn; cnn += dn * dn;
-  }
-  // 2x2共分散行列の最大固有値に対応する固有ベクトル
-  const tr = cll + cnn;
-  const det = cll * cnn - cln * cln;
-  const lam = (tr + Math.sqrt(Math.max(0, tr * tr - 4 * det))) / 2;
-  const evLat = cln || 1, evLon = lam - cll;
-  return [...stations].sort((a, b) => {
-    const pa = (a.lat - mLat) * evLat + (a.lon - mLon) * evLon;
-    const pb = (b.lat - mLat) * evLat + (b.lon - mLon) * evLon;
-    return pa - pb;
-  });
-}
-
-// 駅グラフ構築：同路線隣接 + 乗換エッジ
-// キー形式: "${name}@@${lineId}"
-function buildStationGraph(stationsAll, lineMap, nearbyPrefs) {
-  const lineStations = {}; // lineId -> [{name, lat, lon, key}]
-  const nameToKeys = {};   // stationName -> [key]
-
-  for (const group of stationsAll) {
-    if (!nearbyPrefs.has(Number(group.prefecture))) continue;
-    for (const s of group.stations) {
-      const name = s.name_kanji || group.name_kanji;
-      const lineId = String(s.ekidata_line_id);
-      if (!name || !s.lat || !s.lon || !lineMap[lineId]) continue;
-      const key = `${name}@@${lineId}`;
-      if (!lineStations[lineId]) lineStations[lineId] = [];
-      if (!lineStations[lineId].find(x => x.key === key)) {
-        lineStations[lineId].push({ name, lat: parseFloat(s.lat), lon: parseFloat(s.lon), key });
-      }
-      if (!nameToKeys[name]) nameToKeys[name] = [];
-      if (!nameToKeys[name].includes(key)) nameToKeys[name].push(key);
-    }
-  }
-
-  const adj = {};
-  const addEdge = (k1, k2, w) => {
-    if (!adj[k1]) adj[k1] = [];
-    if (!adj[k2]) adj[k2] = [];
-    adj[k1].push({ key: k2, w });
-    adj[k2].push({ key: k1, w });
-  };
-
-  // 同路線の隣接駅エッジ（40km/h換算）
-  for (const stations of Object.values(lineStations)) {
-    const ordered = reconstructLineOrder(stations);
-    for (let i = 0; i < ordered.length - 1; i++) {
-      const a = ordered[i], b = ordered[i + 1];
-      const dist = haversine(a.lat, a.lon, b.lat, b.lon);
-      addEdge(a.key, b.key, Math.max((dist / 40) * 60, 1.5));
-    }
-  }
-
-  // 乗換エッジ（同名駅・異路線：5分）
-  for (const keys of Object.values(nameToKeys)) {
-    for (let i = 0; i < keys.length; i++)
-      for (let j = i + 1; j < keys.length; j++)
-        addEdge(keys[i], keys[j], 5);
-  }
-
-  return { adj, nameToKeys };
-}
-
-// Dijkstra（バイナリサーチ挿入で疑似優先度付きキュー）
-function dijkstra(adj, startKeys) {
-  const dist = {};
-  const queue = []; // [time, key]
-  for (const k of startKeys) { dist[k] = 0; queue.push([0, k]); }
-  while (queue.length > 0) {
-    const [d, key] = queue.shift();
-    if (d > (dist[key] ?? Infinity)) continue;
-    for (const { key: nk, w } of (adj[key] || [])) {
-      const nd = d + w;
-      if (nd < (dist[nk] ?? Infinity)) {
-        dist[nk] = nd;
-        let lo = 0, hi = queue.length;
-        while (lo < hi) { const m = (lo + hi) >> 1; if (queue[m][0] <= nd) lo = m + 1; else hi = m; }
-        queue.splice(lo, 0, [nd, nk]);
-      }
-    }
-  }
-  return dist;
-}
-
 // ============================================================
 // StationTab コンポーネント
 // ============================================================
@@ -190,7 +68,6 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
   const [allStations, setAllStations] = useState([]); // 近接駅リスト {name, lat, lon}
-  const [mapsAPIReady, setMapsAPIReady] = useState(false);
   const [transitResults, setTransitResults] = useState([]);
   const [transitLoading, setTransitLoading] = useState(false);
   const [debugStatus, setDebugStatus] = useState(null);
@@ -387,15 +264,9 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     return allStations.filter(s => s.name.includes(q)).slice(0, 10);
   }, [nearestInput, nearestStation, allStations]);
 
-  // Google Maps JS API を起動時にロード
+  // 最寄り駅が変わったら Vercel API 経由で乗換時間を取得
   useEffect(() => {
-    if (!MAPS_API_KEY) return;
-    loadMapsAPI(MAPS_API_KEY).then(() => setMapsAPIReady(true)).catch(console.error);
-  }, []);
-
-  // 最寄り駅が変わったら Google Directions API で乗換時間を取得
-  useEffect(() => {
-    if (!nearestStation || !enriched || !mapsAPIReady) return;
+    if (!nearestStation || !enriched) return;
     let cancelled = false;
     setTransitLoading(true);
     setTransitResults([]);
@@ -403,7 +274,6 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
 
     (async () => {
       const cache = (() => { try { return JSON.parse(localStorage.getItem(TRANSIT_CACHE_KEY) || "{}"); } catch { return {}; } })();
-      const ds = new window.google.maps.DirectionsService();
 
       // 市区町村ごとに直線距離が最短の駅を代表として選ぶ
       const muniMap = {};
@@ -415,7 +285,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
         }
       }
 
-      // 直線距離上位 30 件に絞る
+      // 直線距離上位 10 件に絞る
       const targets = Object.entries(muniMap)
         .map(([muni, v]) => ({ muni, ...v }))
         .sort((a, b) => a.km - b.km)
@@ -430,16 +300,13 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           const cKey = `${nearestStation.name}→${t.station}`;
           let cached = cache[cKey];
           if (cached === undefined) {
-            const { mins, status } = await getTransitMinutes(ds, nearestStation.name, t.station);
+            const { mins, status } = await getTransitMinutes(nearestStation.name, t.station);
             if (mins !== null) { cache[cKey] = mins; cached = mins; }
             else { setDebugStatus(s => s || status); }
-          } else {
-            cached = cached;
           }
           return cached != null ? { ...t, mins: Math.round(cached) } : null;
         }));
         results.push(...batchRes.filter(Boolean));
-        // 途中経過を表示
         if (!cancelled) setTransitResults([...results].sort((a, b) => a.mins - b.mins));
       }
 
@@ -452,7 +319,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     })();
 
     return () => { cancelled = true; };
-  }, [nearestStation, enriched, mapsAPIReady]);
+  }, [nearestStation, enriched]);
 
   // ── 選択路線の市区町村別駅グループ ───────────────────────────
   const stationsByMuni = useMemo(() => {
@@ -608,7 +475,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
               <div style={{ fontSize: 11, marginTop: 6 }}>Google Maps で経路を確認しています</div>
             </div>
           )}
-          {nearestStation && !transitLoading && transitResults.length === 0 && mapsAPIReady && (
+          {nearestStation && !transitLoading && transitResults.length === 0 && (
             <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🚫</div>
               <div>乗換ルートが見つかりませんでした</div>
@@ -618,14 +485,6 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 </div>
               )}
               <div style={{ fontSize: 11, marginTop: 8, color: "#475569" }}>別の駅で試してみてください</div>
-            </div>
-          )}
-          {nearestStation && !transitLoading && transitResults.length === 0 && !mapsAPIReady && (
-            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
-              {!MAPS_API_KEY
-                ? <><div style={{ fontSize: 20, marginBottom: 8 }}>⚠️</div><div>APIキーが設定されていません</div><div style={{ fontSize: 11, marginTop: 4 }}>(.env.local を確認し、開発サーバーを再起動してください)</div></>
-                : <><div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div><div>Google Maps API を読み込み中...</div></>
-              }
             </div>
           )}
           {transitResults.length > 0 && (
