@@ -612,6 +612,11 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 match: s => s.includes("西武") && !["西武秩父線","多摩川線"].some(k => s.includes(k)),
               },
               {
+                name: "西武秩父線のフリーきっぷ",
+                url: "https://www.seiburailway.jp/railway/ticket/specialticket/chichibu-free-kippu-digital/",
+                match: s => s.includes("西武秩父線"),
+              },
+              {
                 name: "秩父鉄道のフリーきっぷ",
                 url: "https://www.chichibu-railway.co.jp/information/couponpass.html",
                 match: s => s.includes("秩父鉄道"),
