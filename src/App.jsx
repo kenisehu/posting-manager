@@ -189,6 +189,30 @@ const MUNICIPALITIES_DATA = [
 
 const PREFECTURES = ["埼玉県", "栃木県", "茨城県", "群馬県"];
 
+// マンモス団地データ（市区町村名 → 団地名リスト）
+const MAMMOTH_DANCHI = {
+  "取手市":    ["取手井野団地", "戸頭団地"],
+  "川口市":    ["芝園団地"],
+  "さいたま市": ["田島団地"],
+  "所沢市":    ["プラザシティ新所沢"],
+  "上尾市":    ["原市団地", "西上尾団地"],
+  "草加市":    ["コンフォール松原"],
+  "越谷市":    ["せんげん台パークタウン"],
+  "春日部市":  ["武里団地"],
+  "狭山市":    ["狭山台団地"],
+  "志木市":    ["志木ニュータウン"],
+  "新座市":    ["新座団地"],
+  "久喜市":    ["わし宮団地"],
+  "北本市":    ["北本団地"],
+  "富士見市":  ["アルビス鶴瀬", "コンフォール鶴瀬"],
+  "三郷市":    ["みさと団地"],
+  "坂戸市":    ["若葉台団地", "東坂戸団地", "北坂戸団地"],
+  "鶴ヶ島市":  ["若葉台団地", "かわつるグリーンタウン"],
+  "幸手市":    ["幸手団地"],
+  "吉川市":    ["吉川団地"],
+  "ふじみ野市": ["コンフォール霞ヶ丘", "コンフォール上野台"],
+};
+
 const PREF_COLORS = {
   "埼玉県": { bg: "#fef3c7", accent: "#f59e0b", text: "#92400e" },
   "栃木県": { bg: "#d1fae5", accent: "#10b981", text: "#065f46" },
@@ -655,7 +679,7 @@ export default function PostingApp() {
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
             {tab === "ranking" && <Ranking stats={stats} onMemberClick={name => { setMyBadgesInitialName(name); setTab("mybadges"); }} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
-            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} />}
+            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
                 <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={({ lineMuniMap, muniStationsMap }) => { setStationLineMunis(lineMuniMap); setMuniStations(muniStationsMap); }} initialLine={stationInitialLine} onInitialLineApplied={() => setStationInitialLine(null)} />
@@ -803,7 +827,7 @@ const RANK_CONFIGS = [
   },
 ];
 
-const TOP_N = 10;
+const TOP_N = 3;
 
 function RankCard({ config, data, memberBadges, onMemberClick }) {
   const [showAll, setShowAll] = useState(false);
@@ -1117,37 +1141,6 @@ function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, 
             )}
           </div>
 
-          {/* もうすぐ路線制覇 */}
-          {stationLineMunis && nearLineBadges.length > 0 && (
-            <div className="card" style={{ padding: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🚃 もうすぐ路線制覇！</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {nearLineBadges.map(({ lineName, remaining }) => (
-                  <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <div>
-                      <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
-                      <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
-                      <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
-                      <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
-                    </div>
-                    <button onClick={() => onLineClick?.(lineName)} style={{
-                      background: "#1e293b", border: "1px solid #a855f755", color: "#a855f7",
-                      borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700,
-                      cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                    }}>
-                      路線を見る →
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {!stationLineMunis && (
-            <div className="card" style={{ padding: 16, fontSize: 13, color: "#475569" }}>
-              🚉 「路線」タブを一度開くと路線制覇バッジが解放されます
-            </div>
-          )}
-
           {/* 次のバッジまでの進捗 */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 16 }}>🎯 次のバッジまであと…</div>
@@ -1233,6 +1226,37 @@ function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, 
               </div>
             );
           })()}
+
+          {/* もうすぐ路線制覇 */}
+          {stationLineMunis && nearLineBadges.length > 0 && (
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🚃 もうすぐ路線制覇！</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {nearLineBadges.map(({ lineName, remaining }) => (
+                  <div key={lineName} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <span style={{ color: "#a855f7", fontWeight: 700 }}>{lineName}</span>
+                      <span style={{ color: "#64748b", marginLeft: 8 }}>あと</span>
+                      <span style={{ color: "#f8fafc", fontWeight: 700, margin: "0 4px" }}>{remaining.length}</span>
+                      <span style={{ color: "#64748b" }}>市区町村（{remaining.slice(0, 3).join("・")}）</span>
+                    </div>
+                    <button onClick={() => onLineClick?.(lineName)} style={{
+                      background: "#1e293b", border: "1px solid #a855f755", color: "#a855f7",
+                      borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                    }}>
+                      路線を見る →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!stationLineMunis && (
+            <div className="card" style={{ padding: 16, fontSize: 13, color: "#475569" }}>
+              🚉 「路線」タブを一度開くと路線制覇バッジが解放されます
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1425,7 +1449,7 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
 // ============================================================
 // MapTab
 // ============================================================
-function MapTab({ stats, expandedPref, setExpandedPref, muniStations }) {
+function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -1451,6 +1475,7 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations }) {
           expandedPref={expandedPref}
           setExpandedPref={setExpandedPref}
           muniStations={muniStations}
+          muniDanchi={muniDanchi}
         />
       </Suspense>
     </div>

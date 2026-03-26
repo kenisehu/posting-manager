@@ -397,7 +397,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
 // ============================================================
 // MapView メイン
 // ============================================================
-export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations }) {
+export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations, muniDanchi }) {
   const [geoData, setGeoData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -584,6 +584,34 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
               {muniPopup.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
               {muniPopup.households && <span style={{ color: "#64748b", fontWeight: 400, marginLeft: 6 }}>{muniPopup.households.toLocaleString()}世帯</span>}
             </div>
+            {(() => {
+              const danchiList = muniDanchi?.[muniPopup.name] || [];
+              if (danchiList.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600, marginBottom: 5 }}>🏢 マンモス団地</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {danchiList.map(name => (
+                      <a
+                        key={name}
+                        href={`https://www.google.com/maps/search/${encodeURIComponent(name)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          background: "#0f172a", border: "1px solid #f59e0b44",
+                          borderRadius: 6, padding: "5px 10px",
+                          fontSize: 11, color: "#fbbf24", textDecoration: "none", fontWeight: 600,
+                        }}
+                      >
+                        🏢 {name}
+                        <span style={{ fontSize: 10, color: "#475569", marginLeft: 6 }}>地図 ›</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {!muniStations ? (
               <div style={{ fontSize: 11, color: "#64748b" }}>🚉 路線タブを開くと駅情報が表示されます</div>
             ) : stations.length === 0 ? (

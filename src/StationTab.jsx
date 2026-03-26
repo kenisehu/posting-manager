@@ -289,11 +289,11 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
         }
       }
 
-      // 直線距離上位 10 件に絞る
+      // 直線距離上位 20 件に絞る
       const targets = Object.entries(muniMap)
         .map(([muni, v]) => ({ muni, ...v }))
         .sort((a, b) => a.km - b.km)
-        .slice(0, 10);
+        .slice(0, 20);
 
       // 5 件ずつ並列で API を叩く（キャッシュ優先）
       const results = [];
@@ -428,7 +428,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       {viewMode === "nearest" && !selectedLine && (
         <div>
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-            出発駅を入力すると、車での所要時間をもとに近い順に未配布エリアを表示します（上位10件）。電車ルートは「ルートを見る」ボタンで確認できます。
+            出発駅を入力すると、車での所要時間をもとに近い順に未配布エリアを表示します（上位20件）。電車ルートは「ルートを見る」ボタンで確認できます。
           </div>
 
           {/* 駅名入力 */}
@@ -494,7 +494,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           {transitResults.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🚉 {nearestStation.name}駅から近い順（車）・未配布エリア {transitResults.length}件</span>
+                <span>🚉 {nearestStation.name}駅から近い順（車）・未配布エリア {transitResults.length}件（上位20件）</span>
                 {transitLoading && <span style={{ color: "#f59e0b", fontSize: 11 }}>検索中...</span>}
               </div>
               {transitResults.map((r, i) => {
