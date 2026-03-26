@@ -36,16 +36,30 @@ function muniName({ N03_003, N03_004 }) {
   return N03_004 || N03_003 || null;
 }
 
+// ハーヴァーサイン距離（km）
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ============================================================
 // StationTab コンポーネント
 // ============================================================
 export default function StationTab({ stats, municipalities, onDataLoaded, initialLine, onInitialLineApplied }) {
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
+  const [allStations, setAllStations] = useState([]); // 全国駅リスト {name, lat, lon}
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedLine, setSelectedLine] = useState(null);
   const [lineSearch, setLineSearch] = useState("");
   const [showPosted, setShowPosted] = useState(false);
+  const [viewMode, setViewMode] = useState("line"); // "line" | "nearest"
+  const [nearestInput, setNearestInput] = useState("");
+  const [nearestStation, setNearestStation] = useState(null);
+  const [showNearestSuggest, setShowNearestSuggest] = useState(false);
   const pendingLineRef = useRef(null);
 
   // 外部から路線を指定された時の処理
@@ -71,6 +85,18 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       fetch("https://raw.githubusercontent.com/piuccio/open-data-jp-railway-lines/master/lines.json").then(r => r.json()),
       ...Object.values(PREF_GEOJSON_URLS).map(url => fetch(url).then(r => r.json())),
     ]).then(([stationsAll, linesAll, ...geos]) => {
+
+      // 全国駅リスト（最寄り駅入力用）
+      const stationByName = {};
+      for (const group of stationsAll) {
+        for (const s of group.stations) {
+          const name = s.name_kanji || group.name_kanji;
+          if (name && s.lat && s.lon && !stationByName[name]) {
+            stationByName[name] = { name, lat: parseFloat(s.lat), lon: parseFloat(s.lon) };
+          }
+        }
+      }
+      setAllStations(Object.values(stationByName));
 
       // 路線 ID → 路線名
       const lineMap = {};
@@ -148,6 +174,8 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
             lineId: String(s.ekidata_line_id),
             municipality: muni,
             posted: postedIds.has(id),
+            lat: parseFloat(s.lat),
+            lon: parseFloat(s.lon),
           });
         }
       }
@@ -206,6 +234,30 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     const q = lineSearch.trim();
     return q ? lineList.filter(l => l.name.includes(q)) : lineList;
   }, [lineList, lineSearch]);
+
+  // 最寄り駅サジェスト
+  const nearestSuggestions = useMemo(() => {
+    const q = nearestInput.trim();
+    if (!q || nearestStation) return [];
+    return allStations.filter(s => s.name.includes(q)).slice(0, 10);
+  }, [nearestInput, nearestStation, allStations]);
+
+  // 最寄り駅からの距離ランキング（未配布市区町村）
+  const nearestResults = useMemo(() => {
+    if (!nearestStation || !enriched) return [];
+    const { lat: sLat, lon: sLon } = nearestStation;
+    const muniClosest = {};
+    for (const s of enriched) {
+      if (s.posted || !s.lat || !s.lon) continue;
+      const dist = haversine(sLat, sLon, s.lat, s.lon);
+      if (!muniClosest[s.municipality] || dist < muniClosest[s.municipality].dist) {
+        muniClosest[s.municipality] = { dist, station: s.station, line: s.line };
+      }
+    }
+    return Object.entries(muniClosest)
+      .map(([muni, v]) => ({ muni, ...v }))
+      .sort((a, b) => a.dist - b.dist);
+  }, [nearestStation, enriched]);
 
   // ── 選択路線の市区町村別駅グループ ───────────────────────────
   const stationsByMuni = useMemo(() => {
@@ -291,7 +343,113 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   // ── ready: 路線詳細 or 路線一覧 ──────────────────────────────
   return (
     <div style={{ padding: "16px 12px" }}>
-      {selectedLine ? (
+
+      {/* モード切替タブ */}
+      {!selectedLine && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+          {[["line", "🚃 路線から探す"], ["nearest", "📍 最寄り駅から探す"]].map(([mode, label]) => (
+            <button key={mode} onClick={() => setViewMode(mode)} style={{
+              flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700,
+              borderRadius: 8, border: "none", cursor: "pointer",
+              background: viewMode === mode ? "#f59e0b" : "#1e293b",
+              color: viewMode === mode ? "#1e293b" : "#94a3b8",
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* 最寄り駅から探すビュー */}
+      {viewMode === "nearest" && !selectedLine && (
+        <div>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+            出発駅を入力すると、直線距離が近い順に未配布エリアの駅を表示します
+          </div>
+
+          {/* 駅名入力 */}
+          <div style={{ position: "relative", marginBottom: 16 }}>
+            <input
+              value={nearestInput}
+              onChange={e => { setNearestInput(e.target.value); setNearestStation(null); setShowNearestSuggest(true); }}
+              onFocus={() => setShowNearestSuggest(true)}
+              onBlur={() => setTimeout(() => setShowNearestSuggest(false), 150)}
+              placeholder="出発駅を入力（例：大宮、浦和）"
+              style={{
+                width: "100%", padding: "12px 14px", background: "#1e293b",
+                border: nearestStation ? "1.5px solid #f59e0b" : "1px solid #334155",
+                borderRadius: 10, color: "#f1f5f9", fontSize: 14,
+                boxSizing: "border-box", outline: "none",
+              }}
+            />
+            {nearestStation && (
+              <button onClick={() => { setNearestStation(null); setNearestInput(""); }} style={{
+                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 18,
+              }}>✕</button>
+            )}
+            {showNearestSuggest && nearestSuggestions.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                background: "#1e293b", border: "1px solid #334155", borderRadius: 10,
+                marginTop: 4, maxHeight: 220, overflowY: "auto",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              }}>
+                {nearestSuggestions.map(stn => (
+                  <div key={stn.name} onMouseDown={() => { setNearestStation(stn); setNearestInput(stn.name); setShowNearestSuggest(false); }}
+                    style={{ padding: "11px 14px", cursor: "pointer", fontSize: 14, color: "#e2e8f0", borderBottom: "1px solid #0f172a" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#334155"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    🚉 {stn.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 結果リスト */}
+          {nearestStation && nearestResults.length === 0 && (
+            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>未配布エリアが見つかりません</div>
+          )}
+          {nearestResults.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
+                📍 {nearestStation.name}駅から近い順・未配布エリア {nearestResults.length}件
+              </div>
+              {nearestResults.map((r, i) => (
+                <div key={r.muni} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  background: "#1e293b", border: "1px solid #334155",
+                  borderRadius: 10, padding: "12px 14px",
+                }}>
+                  <div style={{
+                    minWidth: 28, fontWeight: 900, fontSize: 15,
+                    color: i < 3 ? "#f59e0b" : "#475569",
+                  }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 3 }}>
+                      📍 {r.muni}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                      🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: 13, fontWeight: 700, color: "#4ade80",
+                    background: "#14532d22", borderRadius: 8, padding: "4px 10px",
+                    whiteSpace: "nowrap",
+                  }}>
+                    約{r.dist.toFixed(1)}km
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 路線ビュー */}
+      {(viewMode === "line" || selectedLine) && (
+      <>{selectedLine ? (
         /* ── 路線詳細ビュー ── */
         <>
           {/* ヘッダー */}
@@ -439,6 +597,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
             </div>
           )}
         </>
+      )}</>
       )}
     </div>
   );
