@@ -45,13 +45,111 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// 路線の駅順を最近傍法で再構築（北端スタート）
+function reconstructLineOrder(stations) {
+  if (stations.length <= 1) return stations;
+  const visited = new Array(stations.length).fill(false);
+  let si = 0;
+  for (let i = 1; i < stations.length; i++) {
+    if (stations[i].lat > stations[si].lat) si = i;
+  }
+  const ordered = [stations[si]];
+  visited[si] = true;
+  while (ordered.length < stations.length) {
+    const last = ordered[ordered.length - 1];
+    let minD = Infinity, ni = -1;
+    for (let i = 0; i < stations.length; i++) {
+      if (visited[i]) continue;
+      const dl = last.lat - stations[i].lat, dn = last.lon - stations[i].lon;
+      const d = dl * dl + dn * dn;
+      if (d < minD) { minD = d; ni = i; }
+    }
+    if (ni === -1) break;
+    ordered.push(stations[ni]);
+    visited[ni] = true;
+  }
+  return ordered;
+}
+
+// 駅グラフ構築：同路線隣接 + 乗換エッジ
+// キー形式: "${name}@@${lineId}"
+function buildStationGraph(stationsAll, lineMap, nearbyPrefs) {
+  const lineStations = {}; // lineId -> [{name, lat, lon, key}]
+  const nameToKeys = {};   // stationName -> [key]
+
+  for (const group of stationsAll) {
+    if (!nearbyPrefs.has(Number(group.prefecture))) continue;
+    for (const s of group.stations) {
+      const name = s.name_kanji || group.name_kanji;
+      const lineId = String(s.ekidata_line_id);
+      if (!name || !s.lat || !s.lon || !lineMap[lineId]) continue;
+      const key = `${name}@@${lineId}`;
+      if (!lineStations[lineId]) lineStations[lineId] = [];
+      if (!lineStations[lineId].find(x => x.key === key)) {
+        lineStations[lineId].push({ name, lat: parseFloat(s.lat), lon: parseFloat(s.lon), key });
+      }
+      if (!nameToKeys[name]) nameToKeys[name] = [];
+      if (!nameToKeys[name].includes(key)) nameToKeys[name].push(key);
+    }
+  }
+
+  const adj = {};
+  const addEdge = (k1, k2, w) => {
+    if (!adj[k1]) adj[k1] = [];
+    if (!adj[k2]) adj[k2] = [];
+    adj[k1].push({ key: k2, w });
+    adj[k2].push({ key: k1, w });
+  };
+
+  // 同路線の隣接駅エッジ（40km/h換算）
+  for (const stations of Object.values(lineStations)) {
+    const ordered = reconstructLineOrder(stations);
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const a = ordered[i], b = ordered[i + 1];
+      const dist = haversine(a.lat, a.lon, b.lat, b.lon);
+      addEdge(a.key, b.key, Math.max((dist / 40) * 60, 1.5));
+    }
+  }
+
+  // 乗換エッジ（同名駅・異路線：5分）
+  for (const keys of Object.values(nameToKeys)) {
+    for (let i = 0; i < keys.length; i++)
+      for (let j = i + 1; j < keys.length; j++)
+        addEdge(keys[i], keys[j], 5);
+  }
+
+  return { adj, nameToKeys };
+}
+
+// Dijkstra（バイナリサーチ挿入で疑似優先度付きキュー）
+function dijkstra(adj, startKeys) {
+  const dist = {};
+  const queue = []; // [time, key]
+  for (const k of startKeys) { dist[k] = 0; queue.push([0, k]); }
+  while (queue.length > 0) {
+    const [d, key] = queue.shift();
+    if (d > (dist[key] ?? Infinity)) continue;
+    for (const { key: nk, w } of (adj[key] || [])) {
+      const nd = d + w;
+      if (nd < (dist[nk] ?? Infinity)) {
+        dist[nk] = nd;
+        let lo = 0, hi = queue.length;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (queue[m][0] <= nd) lo = m + 1; else hi = m; }
+        queue.splice(lo, 0, [nd, nk]);
+      }
+    }
+  }
+  return dist;
+}
+
 // ============================================================
 // StationTab コンポーネント
 // ============================================================
 export default function StationTab({ stats, municipalities, onDataLoaded, initialLine, onInitialLineApplied }) {
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
-  const [allStations, setAllStations] = useState([]); // 全国駅リスト {name, lat, lon}
+  const [allStations, setAllStations] = useState([]); // 近接駅リスト {name, lat, lon}
+  const [stationGraph, setStationGraph] = useState(null); // {adj, nameToKeys}
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedLine, setSelectedLine] = useState(null);
   const [lineSearch, setLineSearch] = useState("");
@@ -104,6 +202,9 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       // 路線 ID → 路線名
       const lineMap = {};
       for (const l of linesAll) lineMap[String(l.ekidata_id)] = l.name_kanji;
+
+      // 駅グラフ構築（近接県 + 4県）
+      setStationGraph(buildStationGraph(stationsAll, lineMap, NEARBY_PREFS));
 
       // 市区町村ごとのポリゴン（バウンディングボックス付き）
       const muniGeoms = {};
@@ -245,22 +346,30 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     return allStations.filter(s => s.name.includes(q)).slice(0, 10);
   }, [nearestInput, nearestStation, allStations]);
 
-  // 最寄り駅からの距離ランキング（未配布市区町村）
+  // 最寄り駅からのDijkstra所要時間ランキング（未配布市区町村）
   const nearestResults = useMemo(() => {
-    if (!nearestStation || !enriched) return [];
-    const { lat: sLat, lon: sLon } = nearestStation;
+    if (!nearestStation || !enriched || !stationGraph) return [];
+    const { adj, nameToKeys } = stationGraph;
+    const startKeys = nameToKeys[nearestStation.name] || [];
+    if (startKeys.length === 0) return [];
+
+    const dist = dijkstra(adj, startKeys);
+
     const muniClosest = {};
     for (const s of enriched) {
-      if (s.posted || !s.lat || !s.lon) continue;
-      const dist = haversine(sLat, sLon, s.lat, s.lon);
-      if (!muniClosest[s.municipality] || dist < muniClosest[s.municipality].dist) {
-        muniClosest[s.municipality] = { dist, station: s.station, line: s.line };
+      if (s.posted) continue;
+      const keys = nameToKeys[s.station] || [];
+      let minTime = Infinity;
+      for (const k of keys) { const t = dist[k] ?? Infinity; if (t < minTime) minTime = t; }
+      if (minTime === Infinity) continue;
+      if (!muniClosest[s.municipality] || minTime < muniClosest[s.municipality].time) {
+        muniClosest[s.municipality] = { time: minTime, station: s.station, line: s.line };
       }
     }
     return Object.entries(muniClosest)
       .map(([muni, v]) => ({ muni, ...v }))
-      .sort((a, b) => a.dist - b.dist);
-  }, [nearestStation, enriched]);
+      .sort((a, b) => a.time - b.time);
+  }, [nearestStation, enriched, stationGraph]);
 
   // ── 選択路線の市区町村別駅グループ ───────────────────────────
   const stationsByMuni = useMemo(() => {
@@ -411,40 +520,48 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
 
           {/* 結果リスト */}
           {nearestStation && nearestResults.length === 0 && (
-            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>未配布エリアが見つかりません</div>
+            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
+              {stationGraph && !(stationGraph.nameToKeys[nearestStation.name]?.length)
+                ? "この駅はグラフ上に存在しません（路線データ対象外の可能性）"
+                : "未配布エリアが見つかりません"}
+            </div>
           )}
           {nearestResults.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
-                📍 {nearestStation.name}駅から近い順・未配布エリア {nearestResults.length}件
+                🚉 {nearestStation.name}駅から近い順（目安時間）・未配布エリア {nearestResults.length}件
               </div>
-              {nearestResults.map((r, i) => (
-                <div key={r.muni} style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  background: "#1e293b", border: "1px solid #334155",
-                  borderRadius: 10, padding: "12px 14px",
-                }}>
-                  <div style={{
-                    minWidth: 28, fontWeight: 900, fontSize: 15,
-                    color: i < 3 ? "#f59e0b" : "#475569",
-                  }}>{i + 1}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 3 }}>
-                      📍 {r.muni}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: 13, fontWeight: 700, color: "#4ade80",
-                    background: "#14532d22", borderRadius: 8, padding: "4px 10px",
-                    whiteSpace: "nowrap",
+              {nearestResults.map((r, i) => {
+                const mins = Math.round(r.time);
+                const color = mins <= 20 ? "#4ade80" : mins <= 40 ? "#f59e0b" : "#94a3b8";
+                return (
+                  <div key={r.muni} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    background: "#1e293b", border: "1px solid #334155",
+                    borderRadius: 10, padding: "12px 14px",
                   }}>
-                    約{r.dist.toFixed(1)}km
+                    <div style={{
+                      minWidth: 28, fontWeight: 900, fontSize: 15,
+                      color: i < 3 ? "#f59e0b" : "#475569",
+                    }}>{i + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 3 }}>
+                        📍 {r.muni}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: 13, fontWeight: 700, color,
+                      background: color + "22", borderRadius: 8, padding: "4px 10px",
+                      whiteSpace: "nowrap",
+                    }}>
+                      約{mins}分
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
