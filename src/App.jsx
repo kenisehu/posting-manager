@@ -377,6 +377,7 @@ export default function PostingApp() {
   const [stationLineMunis, setStationLineMunis] = useState(null);
   const [muniStations, setMuniStations] = useState(null);
   const [stationInitialLine, setStationInitialLine] = useState(null);
+  const [myBadgesInitialName, setMyBadgesInitialName] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -621,14 +622,14 @@ export default function PostingApp() {
       {/* Tab Navigation */}
       <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", display: "flex", overflowX: "auto", padding: "0 16px" }}>
         {[
-          { key: "home", label: "🏠 ホーム" },
-          { key: "ranking", label: "🏆 ランキング" },
+          { key: "home",     label: "🏠 ホーム" },
+          { key: "map",      label: "🗾 地図" },
+          { key: "station",  label: "🚉 路線" },
+          { key: "ranking",  label: "🏆 ランキング" },
           { key: "mybadges", label: "🎖️ マイバッジ" },
-          { key: "map", label: "🗾 地図" },
-          { key: "station", label: "🚉 路線" },
-          { key: "list", label: "📋 一覧" },
-          { key: "history", label: "📅 履歴" },
-          { key: "settings", label: "⚙️ 設定" },
+          { key: "list",     label: "📋 一覧" },
+          { key: "history",  label: "📅 履歴" },
+          // { key: "settings", label: "⚙️ 設定" }, // 非表示（機能は保持）
         ].map(t => (
           <button key={t.key} className="tab-btn" onClick={() => setTab(t.key)}
             style={{
@@ -652,8 +653,8 @@ export default function PostingApp() {
         ) : (
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
-            {tab === "ranking" && <Ranking stats={stats} />}
-            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} />}
+            {tab === "ranking" && <Ranking stats={stats} onMemberClick={name => { setMyBadgesInitialName(name); setTab("mybadges"); }} />}
+            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
@@ -804,7 +805,7 @@ const RANK_CONFIGS = [
 
 const TOP_N = 10;
 
-function RankCard({ config, data, memberBadges }) {
+function RankCard({ config, data, memberBadges, onMemberClick }) {
   const [showAll, setShowAll] = useState(false);
 
   if (!data || data.length === 0) {
@@ -857,7 +858,10 @@ function RankCard({ config, data, memberBadges }) {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
+                    <span
+                      onClick={() => onMemberClick?.(m.name)}
+                      style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc", cursor: "pointer", textDecoration: "underline", textDecorationColor: "#475569" }}
+                    >{m.name}</span>
                     {[
                       // カテゴリごとに最高ランクのみ
                       ...Object.values(badges.reduce((acc, b) => {
@@ -908,7 +912,7 @@ function RankCard({ config, data, memberBadges }) {
   );
 }
 
-function Ranking({ stats }) {
+function Ranking({ stats, onMemberClick }) {
   const rankData = {
     flyer: stats.memberRanking,
     pioneer: stats.pioneerRanking,
@@ -920,7 +924,7 @@ function Ranking({ stats }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
         {RANK_CONFIGS.map(config => (
-          <RankCard key={config.key} config={config} data={rankData[config.key]} memberBadges={stats.memberBadges} />
+          <RankCard key={config.key} config={config} data={rankData[config.key]} memberBadges={stats.memberBadges} onMemberClick={onMemberClick} />
         ))}
       </div>
     </div>
@@ -967,10 +971,14 @@ const BADGE_NEXT_DEFS = [
   },
 ];
 
-function MyBadges({ stats, records, stationLineMunis, onLineClick }) {
+function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, onInitialNameApplied }) {
   const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
   const [selectedName, setSelectedName] = useState("");
   const [showSuggest, setShowSuggest] = useState(false);
+
+  useEffect(() => {
+    if (initialName) { setSelectedName(initialName); onInitialNameApplied?.(); }
+  }, [initialName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nameCandidates = useMemo(() => {
     if (!selectedName.trim()) return allMembers;
