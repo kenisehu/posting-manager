@@ -582,20 +582,27 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
             </label>
           </div>
 
-          {/* フリーきっぷ検索リンク */}
-          <a
-            href={`https://www.google.com/search?q=${encodeURIComponent(selectedLine + " フリーきっぷ")}`}
-            target="_blank" rel="noopener noreferrer"
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              marginTop: 10, padding: "10px 14px",
-              background: "#1e293b", border: "1px solid #334155",
-              borderRadius: 10, textDecoration: "none", color: "#38bdf8", fontSize: 13, fontWeight: 600,
-            }}
-          >
-            🎫 {selectedLine} のフリーきっぷを検索
-            <span style={{ marginLeft: "auto", fontSize: 16, color: "#475569" }}>›</span>
-          </a>
+          {/* フリーきっぷリンク */}
+          {(() => {
+            const JR_KEYWORDS = ["東北本線","高崎線","水戸線","常磐線","宇都宮線","両毛線",
+              "八高線","川越線","武蔵野線","埼京線","湘南新宿","上越線","信越本線",
+              "烏山線","水郡線","日光線","東北新幹線","上越新幹線","北陸新幹線","JR"];
+            const isJR = JR_KEYWORDS.some(k => selectedLine.includes(k));
+            const href = isJR
+              ? "https://www.jreast.co.jp/tokyo/tickets_otoku/"
+              : `https://www.google.com/search?q=${encodeURIComponent(selectedLine + " フリーきっぷ")}`;
+            return (
+              <a href={href} target="_blank" rel="noopener noreferrer" style={{
+                display: "flex", alignItems: "center", gap: 8,
+                marginTop: 10, padding: "10px 14px",
+                background: "#1e293b", border: "1px solid #334155",
+                borderRadius: 10, textDecoration: "none", color: "#38bdf8", fontSize: 13, fontWeight: 600,
+              }}>
+                🎫 {selectedLine} のフリーきっぷを{isJR ? "見る" : "検索"}
+                <span style={{ marginLeft: "auto", fontSize: 16, color: "#475569" }}>›</span>
+              </a>
+            );
+          })()}
 
           <div style={{ borderBottom: "1px solid #1e293b", margin: "10px 0 14px" }} />
 
