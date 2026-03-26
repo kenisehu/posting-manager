@@ -1428,7 +1428,7 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations }) {
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>🗾 投函進捗マップ</div>
         <div style={{ fontSize: 12, color: "#64748b" }}>
-          投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。市区町村をクリックすると拡大表示されます。
+          投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。県をタップ→拡大、市区町村をタップ→駅情報を確認できます。
         </div>
       </div>
       <Suspense fallback={

@@ -408,7 +408,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       const targets = Object.entries(muniMap)
         .map(([muni, v]) => ({ muni, ...v }))
         .sort((a, b) => a.km - b.km)
-        .slice(0, 30);
+        .slice(0, 10);
 
       // 5 件ずつ並列で API を叩く（キャッシュ優先）
       const results = [];
