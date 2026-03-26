@@ -4,13 +4,21 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const TRANSIT_CACHE_KEY = "transit_time_cache_v2";
 
-// Google Maps JS API を動的ロード
+// Google Maps JS API を動的ロード（callback方式で確実に初期化を待つ）
 function loadMapsAPI(apiKey) {
   return new Promise((resolve, reject) => {
     if (window.google?.maps?.DirectionsService) { resolve(); return; }
+    // 既にスクリプト追加済みなら初期化を待つ
+    if (document.querySelector("script[data-gmaps]")) {
+      const t = setInterval(() => { if (window.google?.maps?.DirectionsService) { clearInterval(t); resolve(); } }, 200);
+      setTimeout(() => { clearInterval(t); reject(new Error("timeout")); }, 15000);
+      return;
+    }
+    const cb = "_gmInit_" + Date.now();
+    window[cb] = () => { resolve(); delete window[cb]; };
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
-    s.onload = resolve;
+    s.setAttribute("data-gmaps", "1");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cb}&loading=async`;
     s.onerror = () => reject(new Error("Google Maps API の読み込みに失敗しました"));
     document.head.appendChild(s);
   });
@@ -543,7 +551,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       {viewMode === "nearest" && !selectedLine && (
         <div>
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-            出発駅を入力すると、直線距離が近い順に未配布エリアの駅を表示します
+            出発駅を入力すると、Google Maps で乗換時間を検索し、近い順に未配布エリアを表示します（上位10件）
           </div>
 
           {/* 駅名入力 */}
@@ -597,7 +605,10 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           )}
           {nearestStation && !transitLoading && transitResults.length === 0 && !mapsAPIReady && (
             <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
-              Google Maps API を読み込み中...
+              {!MAPS_API_KEY
+                ? <><div style={{ fontSize: 20, marginBottom: 8 }}>⚠️</div><div>APIキーが設定されていません</div><div style={{ fontSize: 11, marginTop: 4 }}>(.env.local を確認し、開発サーバーを再起動してください)</div></>
+                : <><div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div><div>Google Maps API を読み込み中...</div></>
+              }
             </div>
           )}
           {transitResults.length > 0 && (
