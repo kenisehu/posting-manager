@@ -500,34 +500,47 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 const color = r.mins <= 20 ? "#4ade80" : r.mins <= 40 ? "#f59e0b" : "#94a3b8";
                 return (
                   <div key={r.muni} style={{
-                    display: "flex", alignItems: "center", gap: 12,
                     background: "#1e293b", border: "1px solid #334155",
                     borderRadius: 10, padding: "12px 14px",
                   }}>
-                    <div style={{
-                      minWidth: 28, fontWeight: 900, fontSize: 15,
-                      color: i < 3 ? "#f59e0b" : "#475569",
-                    }}>{i + 1}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 3 }}>
-                        📍 {r.muni}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                        🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{
-                        fontSize: 13, fontWeight: 700, color,
-                        background: color + "22", borderRadius: 6, padding: "3px 9px",
-                        whiteSpace: "nowrap",
-                      }}>
-                        🚃 約{r.mins}分
+                        minWidth: 28, fontWeight: 900, fontSize: 15,
+                        color: i < 3 ? "#f59e0b" : "#475569",
+                      }}>{i + 1}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 3 }}>
+                          📍 {r.muni}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                          🚃 {r.line}&nbsp;•&nbsp;🚉 {r.station}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
-                        🚗 約{r.km.toFixed(1)}km
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                        <div style={{
+                          fontSize: 13, fontWeight: 700, color,
+                          background: color + "22", borderRadius: 6, padding: "3px 9px",
+                          whiteSpace: "nowrap",
+                        }}>
+                          🚃 約{r.mins}分
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
+                          📏 約{r.km.toFixed(1)}km
+                        </div>
                       </div>
                     </div>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${nearestStation.lat},${nearestStation.lon}&destination=${r.lat},${r.lon}&travelmode=transit`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        display: "block", marginTop: 10,
+                        textAlign: "center", fontSize: 12, fontWeight: 600,
+                        color: "#38bdf8", background: "#0f172a",
+                        borderRadius: 6, padding: "7px 0", textDecoration: "none",
+                      }}
+                    >
+                      🗺️ Google Maps でルートを見る
+                    </a>
                   </div>
                 );
               })}

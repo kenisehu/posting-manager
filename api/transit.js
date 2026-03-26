@@ -6,12 +6,15 @@ export default async function handler(req, res) {
 
   const originStr = `${origin_lat},${origin_lon}`;
   const destStr = `${dest_lat},${dest_lon}`;
+  // 5分後の Unix タイムスタンプ（transit には未来時刻が必要な場合がある）
+  const departureTime = Math.floor(Date.now() / 1000) + 300;
 
   const url =
     `https://maps.googleapis.com/maps/api/directions/json` +
     `?origin=${originStr}` +
     `&destination=${destStr}` +
-    `&mode=driving` +
+    `&mode=transit` +
+    `&departure_time=${departureTime}` +
     `&region=jp` +
     `&language=ja` +
     `&key=${apiKey}`;
@@ -19,10 +22,9 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(url);
     const data = await response.json();
-    // _debug フィールドで座標・ステータスをフロントに返す
     data._debug = { originStr, destStr, status: data.status };
     res.json(data);
   } catch (e) {
-    res.status(500).json({ error: e.message, _debug: { originStr, destStr } });
+    res.status(500).json({ error: e.message });
   }
 }
