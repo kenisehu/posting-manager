@@ -595,7 +595,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                 ].some(k => s.includes(k)),
               },
               {
-                name: "週末パス",
+                name: "ぐんまワンデーローカルパス",
                 url: "https://media.jreast.co.jp/articles/1996",
                 match: s => ["吾妻線","上越線","わたらせ","上毛電","両毛線","東武佐野","東武小泉",
                   "東武桐生","東武伊勢崎","高崎線","信越本線","上信",
