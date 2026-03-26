@@ -4,7 +4,6 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "API key not configured" });
   if (!origin_lat || !dest_lat) return res.status(400).json({ error: "coordinates required" });
 
-  // URLSearchParams はカンマを %2C にエンコードするので文字列で直接組み立てる
   const url =
     `https://maps.googleapis.com/maps/api/directions/json` +
     `?origin=${origin_lat},${origin_lon}` +
@@ -15,11 +14,15 @@ export default async function handler(req, res) {
     `&language=ja` +
     `&key=${apiKey}`;
 
+  console.log("[transit] origin:", `${origin_lat},${origin_lon}`, "dest:", `${dest_lat},${dest_lon}`);
+
   try {
     const response = await fetch(url);
     const data = await response.json();
+    console.log("[transit] status:", data.status, "waypoints:", JSON.stringify(data.geocoded_waypoints));
     res.json(data);
   } catch (e) {
+    console.log("[transit] error:", e.message);
     res.status(500).json({ error: e.message });
   }
 }
