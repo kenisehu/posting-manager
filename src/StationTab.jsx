@@ -2,6 +2,45 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 const TRANSIT_CACHE_KEY = "transit_time_cache_v2";
 
+// ============================================================
+// 鉄道会社フリーきっぷ URL マップ
+// 空文字のものはボタンが表示されません。URLを入れると表示されます。
+// ============================================================
+const FREE_PASS_LINKS = {
+  "JR東日本":           "",  // 例: https://www.jreast.co.jp/pass/
+  "東武鉄道":           "",  // 例: https://www.tobu.co.jp/ticket/coupon/pass/
+  "西武鉄道":           "",  // 例: https://www.seiburailway.jp/railways/leisure/
+  "秩父鉄道":           "",
+  "つくばエクスプレス": "",
+  "関東鉄道":           "",
+  "わたらせ渓谷鐵道":   "",
+  "上毛電鉄":           "",
+  "上信電鉄":           "",
+  "真岡鐵道":           "",
+  "宇都宮ライトレール": "",
+};
+
+// 路線名 → 鉄道会社名
+function getCompany(lineName) {
+  if (!lineName) return null;
+  if (lineName.includes("東武")) return "東武鉄道";
+  if (lineName.includes("西武")) return "西武鉄道";
+  if (lineName.includes("秩父鉄道")) return "秩父鉄道";
+  if (lineName.includes("つくばエクスプレス")) return "つくばエクスプレス";
+  if (lineName.includes("関東鉄道")) return "関東鉄道";
+  if (lineName.includes("わたらせ")) return "わたらせ渓谷鐵道";
+  if (lineName.includes("上毛電鉄")) return "上毛電鉄";
+  if (lineName.includes("上信電鉄")) return "上信電鉄";
+  if (lineName.includes("真岡")) return "真岡鐵道";
+  if (lineName.includes("ライトレール") || lineName.includes("宇都宮")) return "宇都宮ライトレール";
+  // JR系（東北本線・高崎線・水戸線・常磐線・宇都宮線 etc.）
+  const JR_LINES = ["東北本線", "高崎線", "水戸線", "常磐線", "宇都宮線", "両毛線",
+    "八高線", "川越線", "武蔵野線", "埼京線", "湘南新宿ライン", "上越線",
+    "信越本線", "烏山線", "水郡線", "日光線", "東北新幹線", "上越新幹線", "北陸新幹線"];
+  if (JR_LINES.some(l => lineName.includes(l))) return "JR東日本";
+  return null;
+}
+
 // Vercel serverless 経由で乗換時間（分）を取得（座標指定）
 async function getTransitMinutes(originLat, originLon, destLat, destLon) {
   try {
@@ -580,6 +619,24 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
               配布済みも表示
             </label>
           </div>
+
+          {/* フリーきっぷリンク */}
+          {(() => {
+            const company = getCompany(selectedLine);
+            const url = company && FREE_PASS_LINKS[company];
+            if (!url) return null;
+            return (
+              <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                display: "flex", alignItems: "center", gap: 8,
+                marginTop: 10, padding: "10px 14px",
+                background: "#1e293b", border: "1px solid #334155",
+                borderRadius: 10, textDecoration: "none", color: "#38bdf8", fontSize: 13, fontWeight: 600,
+              }}>
+                🎫 {company}のフリーきっぷ・乗り放題情報
+                <span style={{ marginLeft: "auto", fontSize: 16, color: "#475569" }}>›</span>
+              </a>
+            );
+          })()}
 
           <div style={{ borderBottom: "1px solid #1e293b", margin: "10px 0 14px" }} />
 
