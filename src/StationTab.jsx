@@ -1,4 +1,38 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+
+// Google Maps API キー（.env.local で管理）
+const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const TRANSIT_CACHE_KEY = "transit_time_cache_v2";
+
+// Google Maps JS API を動的ロード
+function loadMapsAPI(apiKey) {
+  return new Promise((resolve, reject) => {
+    if (window.google?.maps?.DirectionsService) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("Google Maps API の読み込みに失敗しました"));
+    document.head.appendChild(s);
+  });
+}
+
+// Directions API で乗換時間（分）を取得
+function getTransitMinutes(ds, oLat, oLon, dLat, dLon) {
+  return new Promise((resolve) => {
+    ds.route({
+      origin: { lat: oLat, lng: oLon },
+      destination: { lat: dLat, lng: dLon },
+      travelMode: window.google.maps.TravelMode.TRANSIT,
+      transitOptions: { departureTime: new Date() },
+    }, (result, status) => {
+      if (status === "OK" && result?.routes?.[0]) {
+        resolve(result.routes[0].legs[0].duration.value / 60);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
 
 // ============================================================
 // GeoJSON データ URL（4県）
@@ -147,7 +181,9 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   const [loadState, setLoadState] = useState("idle"); // idle | loading | ready | error
   const [enriched, setEnriched] = useState(null);
   const [allStations, setAllStations] = useState([]); // 近接駅リスト {name, lat, lon}
-  const [stationGraph, setStationGraph] = useState(null); // {adj, nameToKeys}
+  const [mapsAPIReady, setMapsAPIReady] = useState(false);
+  const [transitResults, setTransitResults] = useState([]);
+  const [transitLoading, setTransitLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedLine, setSelectedLine] = useState(null);
   const [lineSearch, setLineSearch] = useState("");
@@ -200,9 +236,6 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
       // 路線 ID → 路線名
       const lineMap = {};
       for (const l of linesAll) lineMap[String(l.ekidata_id)] = l.name_kanji;
-
-      // 駅グラフ構築（近接県 + 4県）
-      setStationGraph(buildStationGraph(stationsAll, lineMap, NEARBY_PREFS));
 
       // 市区町村ごとのポリゴン（バウンディングボックス付き）
       const muniGeoms = {};
@@ -344,32 +377,68 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     return allStations.filter(s => s.name.includes(q)).slice(0, 10);
   }, [nearestInput, nearestStation, allStations]);
 
-  // 最寄り駅からのDijkstra所要時間ランキング（未配布市区町村）
-  const nearestResults = useMemo(() => {
-    if (!nearestStation || !enriched || !stationGraph) return [];
-    const { adj, nameToKeys } = stationGraph;
-    const startKeys = nameToKeys[nearestStation.name] || [];
-    if (startKeys.length === 0) return [];
+  // Google Maps JS API を起動時にロード
+  useEffect(() => {
+    if (!MAPS_API_KEY) return;
+    loadMapsAPI(MAPS_API_KEY).then(() => setMapsAPIReady(true)).catch(console.error);
+  }, []);
 
-    const dist = dijkstra(adj, startKeys);
+  // 最寄り駅が変わったら Google Directions API で乗換時間を取得
+  useEffect(() => {
+    if (!nearestStation || !enriched || !mapsAPIReady) return;
+    let cancelled = false;
+    setTransitLoading(true);
+    setTransitResults([]);
 
-    const { lat: sLat, lon: sLon } = nearestStation;
-    const muniClosest = {};
-    for (const s of enriched) {
-      if (s.posted || !s.lat || !s.lon) continue;
-      const keys = nameToKeys[s.station] || [];
-      let minTime = Infinity;
-      for (const k of keys) { const t = dist[k] ?? Infinity; if (t < minTime) minTime = t; }
-      if (minTime === Infinity) continue;
-      const km = haversine(sLat, sLon, s.lat, s.lon);
-      if (!muniClosest[s.municipality] || minTime < muniClosest[s.municipality].time) {
-        muniClosest[s.municipality] = { time: minTime, station: s.station, line: s.line, km };
+    (async () => {
+      const cache = (() => { try { return JSON.parse(localStorage.getItem(TRANSIT_CACHE_KEY) || "{}"); } catch { return {}; } })();
+      const ds = new window.google.maps.DirectionsService();
+
+      // 市区町村ごとに直線距離が最短の駅を代表として選ぶ
+      const muniMap = {};
+      for (const s of enriched) {
+        if (s.posted || !s.lat || !s.lon) continue;
+        const km = haversine(nearestStation.lat, nearestStation.lon, s.lat, s.lon);
+        if (!muniMap[s.municipality] || km < muniMap[s.municipality].km) {
+          muniMap[s.municipality] = { station: s.station, line: s.line, lat: s.lat, lon: s.lon, km };
+        }
       }
-    }
-    return Object.entries(muniClosest)
-      .map(([muni, v]) => ({ muni, ...v }))
-      .sort((a, b) => a.time - b.time);
-  }, [nearestStation, enriched, stationGraph]);
+
+      // 直線距離上位 30 件に絞る
+      const targets = Object.entries(muniMap)
+        .map(([muni, v]) => ({ muni, ...v }))
+        .sort((a, b) => a.km - b.km)
+        .slice(0, 30);
+
+      // 5 件ずつ並列で API を叩く（キャッシュ優先）
+      const results = [];
+      for (let i = 0; i < targets.length; i += 5) {
+        if (cancelled) break;
+        const batch = targets.slice(i, i + 5);
+        const batchRes = await Promise.all(batch.map(async (t) => {
+          const cKey = `${nearestStation.name}→${t.station}`;
+          let mins = cache[cKey];
+          if (mins === undefined) {
+            mins = await getTransitMinutes(ds, nearestStation.lat, nearestStation.lon, t.lat, t.lon);
+            if (mins !== null) cache[cKey] = mins;
+          }
+          return mins != null ? { ...t, mins: Math.round(mins) } : null;
+        }));
+        results.push(...batchRes.filter(Boolean));
+        // 途中経過を表示
+        if (!cancelled) setTransitResults([...results].sort((a, b) => a.mins - b.mins));
+      }
+
+      if (!cancelled) {
+        try { localStorage.setItem(TRANSIT_CACHE_KEY, JSON.stringify(cache)); } catch {}
+        results.sort((a, b) => a.mins - b.mins);
+        setTransitResults(results);
+        setTransitLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [nearestStation, enriched, mapsAPIReady]);
 
   // ── 選択路線の市区町村別駅グループ ───────────────────────────
   const stationsByMuni = useMemo(() => {
@@ -519,21 +588,26 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           </div>
 
           {/* 結果リスト */}
-          {nearestStation && nearestResults.length === 0 && (
+          {nearestStation && transitLoading && transitResults.length === 0 && (
             <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
-              {stationGraph && !(stationGraph.nameToKeys[nearestStation.name]?.length)
-                ? "この駅はグラフ上に存在しません（路線データ対象外の可能性）"
-                : "未配布エリアが見つかりません"}
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
+              <div>乗換時間を検索中...</div>
+              <div style={{ fontSize: 11, marginTop: 6 }}>Google Maps で経路を確認しています</div>
             </div>
           )}
-          {nearestResults.length > 0 && (
+          {nearestStation && !transitLoading && transitResults.length === 0 && !mapsAPIReady && (
+            <div style={{ textAlign: "center", color: "#64748b", padding: "32px 0" }}>
+              Google Maps API を読み込み中...
+            </div>
+          )}
+          {transitResults.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
-                🚉 {nearestStation.name}駅から近い順（目安時間）・未配布エリア {nearestResults.length}件
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>🚉 {nearestStation.name}駅から近い順・未配布エリア {transitResults.length}件</span>
+                {transitLoading && <span style={{ color: "#f59e0b", fontSize: 11 }}>検索中...</span>}
               </div>
-              {nearestResults.map((r, i) => {
-                const mins = Math.round(r.time);
-                const color = mins <= 20 ? "#4ade80" : mins <= 40 ? "#f59e0b" : "#94a3b8";
+              {transitResults.map((r, i) => {
+                const color = r.mins <= 20 ? "#4ade80" : r.mins <= 40 ? "#f59e0b" : "#94a3b8";
                 return (
                   <div key={r.muni} style={{
                     display: "flex", alignItems: "center", gap: 12,
@@ -558,7 +632,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
                         background: color + "22", borderRadius: 6, padding: "3px 9px",
                         whiteSpace: "nowrap",
                       }}>
-                        🚃 約{mins}分
+                        🚃 約{r.mins}分
                       </div>
                       <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
                         🚗 約{r.km.toFixed(1)}km
