@@ -11,8 +11,7 @@ export default async function handler(req, res) {
     `https://maps.googleapis.com/maps/api/directions/json` +
     `?origin=${originStr}` +
     `&destination=${destStr}` +
-    `&mode=transit` +
-    `&departure_time=now` +
+    `&mode=driving` +
     `&region=jp` +
     `&language=ja` +
     `&key=${apiKey}`;
