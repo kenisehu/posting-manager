@@ -10,6 +10,7 @@ export default async function handler(req, res) {
       origin: origin + "駅",
       destination: destination + "駅",
       mode: "transit",
+      departure_time: Math.floor(Date.now() / 1000),
       language: "ja",
       key: apiKey,
     });
