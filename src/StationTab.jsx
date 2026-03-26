@@ -12,9 +12,10 @@ async function getTransitMinutes(originLat, originLon, destLat, destLon) {
     if (data.status === "OK" && data.routes?.[0]) {
       return { mins: data.routes[0].legs[0].duration.value / 60, status: "OK" };
     }
-    return { mins: null, status: data.status || "ERROR" };
+    const detail = data.error_message || (data.geocoded_waypoints ? JSON.stringify(data.geocoded_waypoints) : "");
+    return { mins: null, status: data.status || "ERROR", detail };
   } catch (e) {
-    return { mins: null, status: "FETCH_ERROR" };
+    return { mins: null, status: "FETCH_ERROR", detail: e.message };
   }
 }
 
@@ -302,9 +303,9 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
           const cKey = `${nearestStation.name}→${t.station}`;
           let cached = cache[cKey];
           if (cached === undefined) {
-            const { mins, status } = await getTransitMinutes(nearestStation.lat, nearestStation.lon, t.lat, t.lon);
+            const { mins, status, detail } = await getTransitMinutes(nearestStation.lat, nearestStation.lon, t.lat, t.lon);
             if (mins !== null) { cache[cKey] = mins; cached = mins; }
-            else { setDebugStatus(s => s || status); }
+            else { setDebugStatus(s => s || (status + (detail ? ": " + detail : ""))); }
           }
           return cached != null ? { ...t, mins: Math.round(cached) } : null;
         }));
