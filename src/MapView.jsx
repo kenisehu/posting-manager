@@ -645,6 +645,11 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
             {muniFlyers?.[muniPopup.name] && (
               <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 10 }}>
                 📮 配布済み：<strong>{muniFlyers[muniPopup.name].toLocaleString()}</strong>枚
+                {muniPopup.households > 0 && (
+                  <span style={{ color: "#64748b", marginLeft: 4 }}>
+                    （カバレッジ率 {(muniFlyers[muniPopup.name] / muniPopup.households * 100).toFixed(2)}%）
+                  </span>
+                )}
               </div>
             )}
             {(() => {
