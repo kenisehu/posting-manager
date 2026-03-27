@@ -1455,6 +1455,16 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi
     [stats.muniMap]
   );
 
+  // 市区町村名 → 配布済み枚数
+  const muniFlyers = useMemo(() => {
+    const m = {};
+    for (const [idStr, data] of Object.entries(stats.muniMap)) {
+      const muni = MUNICIPALITIES_DATA.find(x => x.id === Number(idStr));
+      if (muni) m[muni.name] = data.count;
+    }
+    return m;
+  }, [stats.muniMap]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="card" style={{ padding: 16 }}>
@@ -1476,6 +1486,7 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi
           setExpandedPref={setExpandedPref}
           muniStations={muniStations}
           muniDanchi={muniDanchi}
+          muniFlyers={muniFlyers}
         />
       </Suspense>
     </div>

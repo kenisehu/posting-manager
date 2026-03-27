@@ -397,7 +397,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
 // ============================================================
 // MapView メイン
 // ============================================================
-export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations, muniDanchi }) {
+export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations, muniDanchi, muniFlyers }) {
   const [geoData, setGeoData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -580,10 +580,15 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 cursor: "pointer", fontSize: 18, padding: "0 0 0 8px", lineHeight: 1,
               }}>✕</button>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: muniPopup.isPosted ? "#4ade80" : "#f59e0b", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: muniPopup.isPosted ? "#4ade80" : "#f59e0b", marginBottom: 6 }}>
               {muniPopup.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
               {muniPopup.households && <span style={{ color: "#64748b", fontWeight: 400, marginLeft: 6 }}>{muniPopup.households.toLocaleString()}世帯</span>}
             </div>
+            {muniFlyers?.[muniPopup.name] && (
+              <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 10 }}>
+                📮 配布済み：<strong>{muniFlyers[muniPopup.name].toLocaleString()}</strong>枚
+              </div>
+            )}
             {(() => {
               const danchiList = muniDanchi?.[muniPopup.name] || [];
               if (danchiList.length === 0) return null;
