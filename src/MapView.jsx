@@ -28,7 +28,7 @@ const PREF_BORDER_MAP = {
   "群馬県": "#db2777",
 };
 
-// カバレッジ率（配布枚数/世帯数）でティアを返す（0=未投函, 1〜5）
+// 世帯配布率（配布枚数/世帯数）でティアを返す（0=未投函, 1〜5）
 function getCoverageTier(muniName, muniFlyers, households) {
   const flyers = muniFlyers?.[muniName];
   if (!flyers || !households) return 0;
@@ -202,7 +202,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
 
         <rect width={COMB_W} height={COMB_H} fill="#e8eef5" />
 
-        {/* 市区町村の塗り（カバレッジ濃淡） */}
+        {/* 市区町村の塗り（世帯配布率濃淡） */}
         {features.map((f, i) => {
           const color = PREF_COLORS_MAP[f.pref];
           const isHov = hoveredPref === f.pref;
@@ -241,13 +241,13 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
         })}
       </svg>
 
-      {/* カバレッジ凡例（左下） */}
+      {/* 世帯配布率凡例（左下） */}
       <div style={{
         position: "absolute", bottom: 10, left: 10,
         background: "rgba(255,255,255,0.88)", borderRadius: 6,
         padding: "6px 10px", fontSize: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
       }}>
-        <div style={{ fontWeight: 700, color: "#334155", marginBottom: 4, fontSize: 10 }}>カバレッジ率</div>
+        <div style={{ fontWeight: 700, color: "#334155", marginBottom: 4, fontSize: 10 }}>世帯配布率</div>
         {COVERAGE_LABELS.map((label, tier) => (
           <div key={tier} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
             <div style={{
@@ -647,7 +647,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 📮 配布済み：<strong>{muniFlyers[muniPopup.name].toLocaleString()}</strong>枚
                 {muniPopup.households > 0 && (
                   <span style={{ color: "#64748b", marginLeft: 4 }}>
-                    （カバレッジ率 {(muniFlyers[muniPopup.name] / muniPopup.households * 100).toFixed(2)}%）
+                    （世帯配布率 {(muniFlyers[muniPopup.name] / muniPopup.households * 100).toFixed(2)}%）
                   </span>
                 )}
               </div>

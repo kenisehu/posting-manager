@@ -1472,7 +1472,7 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi
         <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7 }}>
           投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。県をタップ→拡大、市区町村をタップ→駅情報を確認できます。<br />
           <span style={{ color: "#94a3b8" }}>
-            色の濃さは世帯カバレッジ率（配布枚数÷世帯数）を示します：薄い色ほどカバレッジが低く（〜0.5%）、濃いほど高い（2%以上）です。
+            色の濃さは世帯配布率（配布枚数÷世帯数）を示します：薄い色ほど世帯配布率が低く（〜0.5%）、濃いほど高い（2%以上）です。
           </span>
         </div>
       </div>
