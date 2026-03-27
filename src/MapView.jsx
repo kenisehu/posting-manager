@@ -208,7 +208,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
           const isHov = hoveredPref === f.pref;
           const muniName = f.muniMatch?.name || f.geoName;
           const tier = getCoverageTier(muniName, muniFlyers, f.muniMatch?.households);
-          const fill = tier === 0 ? (isHov ? "#c0cedd" : "#d4dde8") : color;
+          const fill = tier === 0 ? (isHov ? "#e8eef5" : "#ffffff") : color;
           const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
           return (
             <path
@@ -252,7 +252,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
           <div key={tier} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
             <div style={{
               width: 14, height: 10, borderRadius: 2,
-              background: tier === 0 ? "#d4dde8" : "#f59e0b",
+              background: tier === 0 ? "#ffffff" : "#f59e0b",
               opacity: tier === 0 ? 1 : COVERAGE_OPACITIES[tier],
               border: "1px solid #b0b8c8",
             }} />
@@ -400,7 +400,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
             const isHov = hoveredIdx === i;
             const muniName = f.muniMatch?.name || f.geoName;
             const tier = getCoverageTier(muniName, muniFlyers, f.muniMatch?.households);
-            const fill = tier === 0 ? (isHov ? "#c8d3e0" : "#d4dde8") : color;
+            const fill = tier === 0 ? (isHov ? "#e8eef5" : "#ffffff") : color;
             const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
             const strokeColor = tier === 0 ? "#9aacbf" : borderColor;
             const strokeW = tier === 0 ? (isHov ? 1.2 : 0.5) : (isHov ? 2.0 : 0.9);
