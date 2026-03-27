@@ -657,7 +657,7 @@ export default function PostingApp() {
       {/* 免責注意書き */}
       <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", padding: "6px 20px", textAlign: "center" }}>
         <span style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5 }}>
-          ⚠️ 本活動は有志サポーターによる自発的な活動であり、チームみらい政党とは直接の関係はありません
+          ⚠️ 本活動は有志サポーターによる自発的な活動であり、チームみらいや各国会議員と直接の関係はありません
         </span>
       </div>
 
@@ -1925,7 +1925,7 @@ function ChangeLog() {
                       color: "#94a3b8", borderRadius: 6, padding: "1px 8px",
                       display: "inline-block",
                     }}>
-                      💡 {u.proposer}さん発案
+                      💡 {u.proposer}{u.proposer === "くじら" ? "" : "さん"}発案
                     </span>
                   )}
                 </div>
