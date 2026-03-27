@@ -1852,17 +1852,17 @@ const CHANGELOG = [
   {
     date: "2026-03-27",
     updates: [
-      { text: "日次バックアップ機能を導入", proposer: "くじら" },
+      { text: "日次バックアップ機能を導入" },
       { text: "ホーム画面アイコンをポスティングマークに変更" },
-      { text: "マイバッジにレーダーチャートを追加", proposer: "くじら" },
-      { text: "市区町村ポップアップに「あと〇枚で×%達成！」を表示", proposer: "くじら" },
+      { text: "マイバッジにレーダーチャートを追加" },
+      { text: "市区町村ポップアップに「あと〇枚で×%達成！」を表示" },
       { text: "世帯配布率で地図に5段階の色濃淡を追加", proposer: "のりぃ" },
     ],
   },
   {
     date: "2026-03-26",
     updates: [
-      { text: "市区町村ポップアップにマンモス団地一覧を追加", proposer: "くじら" },
+      { text: "市区町村ポップアップにマンモス団地一覧を追加" },
       { text: "各鉄道会社のフリーきっぷリンクを追加", proposer: "ナツ" },
       { text: "最寄り駅から未配布エリアを距離順検索する機能を追加" },
     ],
@@ -1925,7 +1925,7 @@ function ChangeLog() {
                       color: "#94a3b8", borderRadius: 6, padding: "1px 8px",
                       display: "inline-block",
                     }}>
-                      💡 {u.proposer}{u.proposer === "くじら" ? "" : "さん"}発案
+                      💡 {u.proposer}さん発案
                     </span>
                   )}
                 </div>
