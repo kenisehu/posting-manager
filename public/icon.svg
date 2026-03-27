@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 背景（角丸） -->
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+
+  <!-- 郵便ポスト本体 -->
+  <rect x="156" y="148" width="200" height="220" rx="100" fill="#ef4444"/>
+
+  <!-- ポストの上部ドーム -->
+  <ellipse cx="256" cy="148" rx="100" ry="36" fill="#dc2626"/>
+
+  <!-- 投函口 -->
+  <rect x="188" y="222" width="136" height="22" rx="11" fill="#7f1d1d"/>
+
+  <!-- 差し込み口の光沢 -->
+  <rect x="192" y="224" width="128" height="8" rx="4" fill="#fca5a5" opacity="0.4"/>
+
+  <!-- ポスト番号プレート -->
+  <rect x="210" y="282" width="92" height="48" rx="8" fill="#b91c1c"/>
+  <text x="256" y="315" text-anchor="middle" fill="#fef2f2" font-size="28" font-weight="bold" font-family="sans-serif">〒</text>
+
+  <!-- ポスト脚 -->
+  <rect x="228" y="368" width="56" height="60" rx="8" fill="#b91c1c"/>
+
+  <!-- ポスト土台 -->
+  <rect x="196" y="416" width="120" height="20" rx="10" fill="#991b1b"/>
+
+  <!-- ポストの光沢ハイライト -->
+  <ellipse cx="216" cy="180" rx="18" ry="28" fill="white" opacity="0.12" transform="rotate(-20 216 180)"/>
+</svg>
