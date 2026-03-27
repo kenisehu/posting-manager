@@ -28,6 +28,21 @@ const PREF_BORDER_MAP = {
   "群馬県": "#db2777",
 };
 
+// カバレッジ率（配布枚数/世帯数）でティアを返す（0=未投函, 1〜5）
+function getCoverageTier(muniName, muniFlyers, households) {
+  const flyers = muniFlyers?.[muniName];
+  if (!flyers || !households) return 0;
+  const pct = (flyers / households) * 100;
+  if (pct < 0.5)  return 1;
+  if (pct < 1.0)  return 2;
+  if (pct < 1.5)  return 3;
+  if (pct < 2.0)  return 4;
+  return 5;
+}
+
+const COVERAGE_OPACITIES = [0, 0.18, 0.38, 0.60, 0.80, 1.0];
+const COVERAGE_LABELS    = ["未投函", "〜0.5%", "0.5〜1%", "1〜1.5%", "1.5〜2%", "2%以上"];
+
 function normalizeName(name) {
   if (!name) return "";
   return name.replace(/\s/g, "").replace("ヶ", "ケ").replace("ヵ", "カ").replace("龍", "竜");
@@ -123,7 +138,7 @@ function buildFeatures(geoDataMap, municipalitiesData, postedMunicipalityIds, pr
 // ============================================================
 const COMB_W = 900, COMB_H = 620, COMB_PAD = 28;
 
-function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref, onMuniClick }) {
+function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref, onMuniClick, muniFlyers }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredPref, setHoveredPref] = useState(null);
@@ -137,16 +152,21 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
   const handleMouseMove = useCallback((e, f) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const muniName = f.muniMatch?.name || f.geoName;
+    const flyers = muniFlyers?.[muniName] || 0;
+    const households = f.muniMatch?.households || 0;
     setTooltip({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
       pref: f.pref,
-      name: f.muniMatch?.name || f.geoName,
-      households: f.muniMatch?.households,
+      name: muniName,
+      households,
       isPosted: f.isPosted,
+      flyers,
+      coveragePct: households ? (flyers / households * 100) : null,
     });
     setHoveredPref(f.pref);
-  }, []);
+  }, [muniFlyers]);
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
@@ -182,17 +202,20 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
 
         <rect width={COMB_W} height={COMB_H} fill="#e8eef5" />
 
-        {/* 市区町村の塗り */}
+        {/* 市区町村の塗り（カバレッジ濃淡） */}
         {features.map((f, i) => {
           const color = PREF_COLORS_MAP[f.pref];
-          const borderColor = PREF_BORDER_MAP[f.pref];
           const isHov = hoveredPref === f.pref;
+          const muniName = f.muniMatch?.name || f.geoName;
+          const tier = getCoverageTier(muniName, muniFlyers, f.muniMatch?.households);
+          const fill = tier === 0 ? (isHov ? "#c0cedd" : "#d4dde8") : color;
+          const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
           return (
             <path
               key={i}
               d={f.d}
-              fill={f.isPosted ? color : (isHov ? "#c0cedd" : "#d4dde8")}
-              fillOpacity={f.isPosted ? (isHov ? 1.0 : 0.85) : 1}
+              fill={fill}
+              fillOpacity={fillOp}
               stroke="#9aacbf"
               strokeWidth={0.4}
               style={{ cursor: "pointer" }}
@@ -217,6 +240,26 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
           );
         })}
       </svg>
+
+      {/* カバレッジ凡例（左下） */}
+      <div style={{
+        position: "absolute", bottom: 10, left: 10,
+        background: "rgba(255,255,255,0.88)", borderRadius: 6,
+        padding: "6px 10px", fontSize: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+      }}>
+        <div style={{ fontWeight: 700, color: "#334155", marginBottom: 4, fontSize: 10 }}>カバレッジ率</div>
+        {COVERAGE_LABELS.map((label, tier) => (
+          <div key={tier} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+            <div style={{
+              width: 14, height: 10, borderRadius: 2,
+              background: tier === 0 ? "#d4dde8" : "#f59e0b",
+              opacity: tier === 0 ? 1 : COVERAGE_OPACITIES[tier],
+              border: "1px solid #b0b8c8",
+            }} />
+            <span style={{ color: "#475569" }}>{label}</span>
+          </div>
+        ))}
+      </div>
 
       {/* 都道府県ラベル（凡例） */}
       <div style={{
@@ -244,8 +287,8 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
       {tooltip && (
         <div style={{
           position: "absolute",
-          left: Math.min(tooltip.x + 14, COMB_W - 185),
-          top: Math.max(tooltip.y - 70, 4),
+          left: Math.min(tooltip.x + 14, COMB_W - 200),
+          top: Math.max(tooltip.y - 80, 4),
           background: "white",
           border: `1px solid ${PREF_BORDER_MAP[tooltip.pref]}`,
           borderLeft: `4px solid ${PREF_COLORS_MAP[tooltip.pref]}`,
@@ -255,8 +298,16 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
         }}>
           <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: 2 }}>{tooltip.name}</div>
           <div style={{ fontSize: 11, color: "#64748b", marginBottom: 3 }}>{tooltip.pref}</div>
-          {tooltip.households && (
+          {tooltip.households > 0 && (
             <div style={{ fontSize: 11, color: "#475569" }}>{tooltip.households.toLocaleString()} 世帯</div>
+          )}
+          {tooltip.flyers > 0 && (
+            <div style={{ fontSize: 11, color: "#10b981", marginTop: 2 }}>
+              📮 {tooltip.flyers.toLocaleString()}枚
+              {tooltip.coveragePct != null && (
+                <span style={{ color: "#64748b", marginLeft: 4 }}>({tooltip.coveragePct.toFixed(2)}%)</span>
+              )}
+            </div>
           )}
           <div style={{ fontSize: 11, fontWeight: 600, color: tooltip.isPosted ? "#10b981" : "#64748b", marginTop: 2 }}>
             {tooltip.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
@@ -272,7 +323,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
 // ============================================================
 const PREF_W = 700, PREF_H = 520, PREF_PAD = 24;
 
-function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onMuniClick }) {
+function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onMuniClick, muniFlyers }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -294,15 +345,20 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
   const handleMouseMove = useCallback((e, f, idx) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const muniName = f.muniMatch?.name || f.geoName;
+    const flyers = muniFlyers?.[muniName] || 0;
+    const households = f.muniMatch?.households || 0;
     setTooltip({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
-      name: f.muniMatch?.name || f.geoName,
-      households: f.muniMatch?.households,
+      name: muniName,
+      households,
       isPosted: f.isPosted,
+      flyers,
+      coveragePct: households ? (flyers / households * 100) : null,
     });
     setHoveredIdx(idx);
-  }, []);
+  }, [muniFlyers]);
 
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
@@ -341,25 +397,17 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
         >
           <rect width={PREF_W} height={PREF_H} fill="#e8eef5" />
           {features.map((f, i) => {
-            if (f.isPosted) return null;
             const isHov = hoveredIdx === i;
+            const muniName = f.muniMatch?.name || f.geoName;
+            const tier = getCoverageTier(muniName, muniFlyers, f.muniMatch?.households);
+            const fill = tier === 0 ? (isHov ? "#c8d3e0" : "#d4dde8") : color;
+            const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
+            const strokeColor = tier === 0 ? "#9aacbf" : borderColor;
+            const strokeW = tier === 0 ? (isHov ? 1.2 : 0.5) : (isHov ? 2.0 : 0.9);
             return (
               <path key={i} d={f.d}
-                fill={isHov ? "#c8d3e0" : "#d4dde8"} stroke="#9aacbf"
-                strokeWidth={isHov ? 1.2 : 0.5} style={{ cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
-                onMouseMove={(e) => handleMouseMove(e, f, i)}
-                onMouseLeave={handleMouseLeave}
-              />
-            );
-          })}
-          {features.map((f, i) => {
-            if (!f.isPosted) return null;
-            const isHov = hoveredIdx === i;
-            return (
-              <path key={i} d={f.d}
-                fill={color} fillOpacity={isHov ? 1.0 : 0.85}
-                stroke={borderColor} strokeWidth={isHov ? 2.0 : 0.9}
+                fill={fill} fillOpacity={fillOp}
+                stroke={strokeColor} strokeWidth={strokeW}
                 style={{ cursor: "pointer" }}
                 onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
                 onMouseMove={(e) => handleMouseMove(e, f, i)}
@@ -381,8 +429,16 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
             pointerEvents: "none", whiteSpace: "nowrap", zIndex: 10,
           }}>
             <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: 2 }}>{tooltip.name}</div>
-            {tooltip.households && (
+            {tooltip.households > 0 && (
               <div style={{ fontSize: 11, color: "#475569" }}>{tooltip.households.toLocaleString()} 世帯</div>
+            )}
+            {tooltip.flyers > 0 && (
+              <div style={{ fontSize: 11, color: "#10b981", marginTop: 2 }}>
+                📮 {tooltip.flyers.toLocaleString()}枚
+                {tooltip.coveragePct != null && (
+                  <span style={{ color: "#64748b", marginLeft: 4 }}>({tooltip.coveragePct.toFixed(2)}%)</span>
+                )}
+              </div>
             )}
             <div style={{ fontSize: 11, fontWeight: 600, color: tooltip.isPosted ? "#10b981" : "#64748b", marginTop: 2 }}>
               {tooltip.isPosted ? "✅ 投函済み" : "⬜ 未投函"}
@@ -476,6 +532,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
         municipalitiesData={municipalitiesData}
         onClickPref={setExpandedPref}
         onMuniClick={handleMuniClick}
+        muniFlyers={muniFlyers}
       />
 
       {/* 拡大モーダル */}
@@ -539,6 +596,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 postedMunicipalityIds={postedMunicipalityIds}
                 municipalitiesData={municipalitiesData}
                 onMuniClick={handleMuniClick}
+                muniFlyers={muniFlyers}
               />
             </div>
           </div>
