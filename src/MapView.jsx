@@ -643,13 +643,29 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
               {muniPopup.households && <span style={{ color: "#64748b", fontWeight: 400, marginLeft: 6 }}>{muniPopup.households.toLocaleString()}世帯</span>}
             </div>
             {muniFlyers?.[muniPopup.name] && (
-              <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 10 }}>
-                📮 配布済み：<strong>{muniFlyers[muniPopup.name].toLocaleString()}</strong>枚
-                {muniPopup.households > 0 && (
-                  <span style={{ color: "#64748b", marginLeft: 4 }}>
-                    （世帯配布率 {(muniFlyers[muniPopup.name] / muniPopup.households * 100).toFixed(2)}%）
-                  </span>
-                )}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: "#4ade80" }}>
+                  📮 配布済み：<strong>{muniFlyers[muniPopup.name].toLocaleString()}</strong>枚
+                  {muniPopup.households > 0 && (
+                    <span style={{ color: "#64748b", marginLeft: 4 }}>
+                      （世帯配布率 {(muniFlyers[muniPopup.name] / muniPopup.households * 100).toFixed(2)}%）
+                    </span>
+                  )}
+                </div>
+                {muniPopup.households > 0 && (() => {
+                  const flyers = muniFlyers[muniPopup.name];
+                  const hh = muniPopup.households;
+                  const nextThreshold = [0.5, 1.0, 1.5, 2.0].find(t => flyers / hh * 100 < t);
+                  if (!nextThreshold) return (
+                    <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 3 }}>🏆 2%以上達成！</div>
+                  );
+                  const needed = Math.ceil(nextThreshold / 100 * hh) - flyers;
+                  return (
+                    <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 3 }}>
+                      📈 あと<strong style={{ color: "#fbbf24" }}>{needed.toLocaleString()}</strong>枚で{nextThreshold}%達成！
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {(() => {
