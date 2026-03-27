@@ -967,7 +967,7 @@ const BADGE_NEXT_DEFS = [
     color: "#f59e0b",
     getValue: s => s.totalFlyers,
     unit: "枚",
-    steps: [500, 1000, 3000, 5000, 10000, 30000],
+    steps: [300, 700, 1500, 3000, 6000, 15000],
   },
   {
     category: "制覇市区町村数",
@@ -975,7 +975,7 @@ const BADGE_NEXT_DEFS = [
     color: "#3b82f6",
     getValue: s => s.conquest,
     unit: "市区町村",
-    steps: [1, 5, 10, 20, 50],
+    steps: [1, 3, 7, 15, 30],
   },
   {
     category: "開拓者回数",
@@ -991,9 +991,99 @@ const BADGE_NEXT_DEFS = [
     color: "#ec4899",
     getValue: s => s.activeDays,
     unit: "日",
-    steps: [3, 7, 14, 30, 60],
+    steps: [1, 3, 7, 14, 25],
   },
 ];
+
+// ============================================================
+// RadarChart（SVG レーダーチャート）
+// ============================================================
+function RadarChart({ memberStats, totalLines }) {
+  const SIZE = 280;
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const R = 90;
+  const LEVELS = 4;
+
+  const maxLines = Math.max(totalLines || 5, 5);
+  const axes = [
+    { label: "投函枚数",     icon: "📮", value: memberStats.totalFlyers,              max: 15000, color: "#f59e0b" },
+    { label: "市区町村制覇", icon: "🏙️", value: memberStats.conquest,                 max: 30,    color: "#3b82f6" },
+    { label: "路線制覇",     icon: "🚃", value: memberStats.completedLines?.size || 0, max: maxLines, color: "#a855f7" },
+    { label: "活動日数",     icon: "📅", value: memberStats.activeDays,               max: 25,    color: "#ec4899" },
+    { label: "開拓者",       icon: "🏴", value: memberStats.pioneer,                  max: 20,    color: "#10b981" },
+  ];
+
+  const n = axes.length;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const pt = (ratio, i) => {
+    const a = startAngle + angleStep * i;
+    return [cx + R * ratio * Math.cos(a), cy + R * ratio * Math.sin(a)];
+  };
+
+  const gridPolygons = Array.from({ length: LEVELS }, (_, li) => {
+    const ratio = (li + 1) / LEVELS;
+    return Array.from({ length: n }, (_, i) => pt(ratio, i)).map(([x, y]) => `${x},${y}`).join(" ");
+  });
+
+  const axisEnds = axes.map((_, i) => pt(1, i));
+
+  const dataPolygon = axes.map((ax, i) => {
+    const ratio = ax.max > 0 ? Math.min(1, ax.value / ax.max) : 0;
+    return pt(ratio, i);
+  });
+  const dataPath = dataPolygon.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`).join(" ") + "Z";
+
+  const labelPts = axes.map((_, i) => {
+    const a = startAngle + angleStep * i;
+    return [cx + (R + 36) * Math.cos(a), cy + (R + 36) * Math.sin(a)];
+  });
+
+  return (
+    <svg width={SIZE} height={SIZE} style={{ overflow: "visible", display: "block", margin: "0 auto" }}>
+      {/* グリッド同心多角形 */}
+      {gridPolygons.map((pts, li) => (
+        <polygon key={li} points={pts} fill={li % 2 === 0 ? "rgba(30,41,59,0.4)" : "none"} stroke="#334155" strokeWidth={li === LEVELS - 1 ? 1.5 : 0.7} />
+      ))}
+      {/* 軸ライン */}
+      {axisEnds.map(([x2, y2], i) => (
+        <line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke="#475569" strokeWidth={1} />
+      ))}
+      {/* データエリア */}
+      <path d={dataPath} fill="rgba(99,102,241,0.22)" stroke="#6366f1" strokeWidth={2.5} strokeLinejoin="round" />
+      {/* データ頂点 */}
+      {dataPolygon.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={4.5} fill={axes[i].color} stroke="#0f172a" strokeWidth={1.5} />
+      ))}
+      {/* 値ラベル（0以外のみ） */}
+      {dataPolygon.map(([x, y], i) => {
+        const ax = axes[i];
+        if (ax.value === 0) return null;
+        const ratio = ax.max > 0 ? Math.min(1, ax.value / ax.max) : 0;
+        if (ratio < 0.08) return null;
+        const offsetY = y < cy ? -10 : 12;
+        return (
+          <text key={i} x={x} y={y + offsetY} textAnchor="middle"
+            style={{ fontSize: 10, fill: axes[i].color, fontWeight: 700, fontFamily: "sans-serif" }}>
+            {ax.value.toLocaleString()}
+          </text>
+        );
+      })}
+      {/* 軸ラベル */}
+      {axes.map((ax, i) => {
+        const [lx, ly] = labelPts[i];
+        return (
+          <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+            style={{ fontSize: 11, fill: "#94a3b8", fontFamily: "sans-serif", userSelect: "none" }}>
+            {ax.icon} {ax.label}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
 
 function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, onInitialNameApplied }) {
   const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
@@ -1100,6 +1190,30 @@ function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, 
 
       {memberStats && (
         <>
+          {/* レーダーチャート */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 16 }}>📊 アクティビティレーダー</div>
+            <RadarChart
+              memberStats={memberStats}
+              totalLines={stationLineMunis ? Object.keys(stationLineMunis).length : 10}
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "6px 14px", marginTop: 16 }}>
+              {[
+                { icon: "📮", label: "投函枚数", color: "#f59e0b", value: memberStats.totalFlyers, unit: "枚", max: 15000 },
+                { icon: "🏙️", label: "市区町村制覇", color: "#3b82f6", value: memberStats.conquest, unit: "市区町村", max: 30 },
+                { icon: "🚃", label: "路線制覇", color: "#a855f7", value: memberStats.completedLines?.size || 0, unit: "路線", max: stationLineMunis ? Object.keys(stationLineMunis).length : 10 },
+                { icon: "📅", label: "活動日数", color: "#ec4899", value: memberStats.activeDays, unit: "日", max: 25 },
+                { icon: "🏴", label: "開拓者", color: "#10b981", value: memberStats.pioneer, unit: "地域", max: 20 },
+              ].map(ax => (
+                <div key={ax.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: ax.color, display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ color: "#64748b" }}>{ax.icon} {ax.label}：</span>
+                  <span style={{ color: ax.color, fontWeight: 700 }}>{ax.value.toLocaleString()}{ax.unit}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* 獲得済みバッジ */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>
