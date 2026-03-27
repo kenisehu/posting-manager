@@ -654,6 +654,13 @@ export default function PostingApp() {
         </div>
       </div>
 
+      {/* 免責注意書き */}
+      <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", padding: "6px 20px", textAlign: "center" }}>
+        <span style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5 }}>
+          ⚠️ 本活動は有志サポーターによる自発的な活動であり、チームみらい政党とは直接の関係はありません
+        </span>
+      </div>
+
       {/* Tab Navigation */}
       <div style={{ background: "#1e293b", borderBottom: "1px solid #334155", display: "flex", overflowX: "auto", padding: "0 16px" }}>
         {[
