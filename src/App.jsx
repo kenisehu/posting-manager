@@ -669,8 +669,9 @@ export default function PostingApp() {
           { key: "station",  label: "🚉 路線" },
           { key: "ranking",  label: "🏆 ランキング" },
           { key: "mybadges", label: "🎖️ マイバッジ" },
-          { key: "list",     label: "📋 一覧" },
-          { key: "history",  label: "📅 履歴" },
+          { key: "list",      label: "📋 一覧" },
+          { key: "history",   label: "📅 履歴" },
+          { key: "changelog", label: "📝 更新履歴" },
           // { key: "settings", label: "⚙️ 設定" }, // 非表示（機能は保持）
         ].map(t => (
           <button key={t.key} className="tab-btn" onClick={() => setTab(t.key)}
@@ -705,6 +706,7 @@ export default function PostingApp() {
             )}
             {tab === "list" && <MuniList stats={stats} />}
             {tab === "history" && <History records={records} onDelete={deleteRecord} />}
+            {tab === "changelog" && <ChangeLog />}
             {tab === "settings" && <Settings records={records} onRenameAccount={renameAccount} />}
           </>
         )}
@@ -1843,6 +1845,99 @@ function downloadCSV(filename, headers, rows) {
 // ============================================================
 // History
 // ============================================================
+// ============================================================
+// ChangeLog（更新履歴）
+// ============================================================
+const CHANGELOG = [
+  {
+    date: "2026-03-27",
+    updates: [
+      { text: "日次バックアップ機能を導入", proposer: "くじら" },
+      { text: "ホーム画面アイコンをポスティングマークに変更" },
+      { text: "マイバッジにレーダーチャートを追加", proposer: "くじら" },
+      { text: "市区町村ポップアップに「あと〇枚で×%達成！」を表示", proposer: "くじら" },
+      { text: "世帯配布率で地図に5段階の色濃淡を追加", proposer: "のりぃ" },
+    ],
+  },
+  {
+    date: "2026-03-26",
+    updates: [
+      { text: "市区町村ポップアップにマンモス団地一覧を追加", proposer: "くじら" },
+      { text: "各鉄道会社のフリーきっぷリンクを追加", proposer: "ナツ" },
+      { text: "最寄り駅から未配布エリアを距離順検索する機能を追加" },
+    ],
+  },
+  {
+    date: "2026-03-25",
+    updates: [
+      { text: "地図の市区町村タップで駅情報を表示" },
+      { text: "マイバッジ画面をランク表示に刷新" },
+      { text: "路線制覇バッジ「〇〇線の主」を追加" },
+    ],
+  },
+  {
+    date: "2026-03-21",
+    updates: [
+      { text: "路線から探す機能を追加" },
+      { text: "地図機能を全面刷新（4県合体地図・県別拡大）" },
+    ],
+  },
+  {
+    date: "2026-02-24",
+    updates: [
+      { text: "初期リリース（記録入力・ダッシュボード・ランキング）" },
+    ],
+  },
+];
+
+function ChangeLog() {
+  return (
+    <div style={{ maxWidth: 700, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 4 }}>📝 更新履歴</div>
+        <div style={{ fontSize: 12, color: "#475569" }}>機能追加・改善の記録</div>
+      </div>
+
+      {CHANGELOG.map(entry => (
+        <div key={entry.date} className="card" style={{ padding: 20 }}>
+          {/* 日付バッジ */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{
+              background: "#f59e0b22", border: "1px solid #f59e0b55",
+              color: "#f59e0b", borderRadius: 8, padding: "4px 12px",
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.05em",
+            }}>
+              {entry.date}
+            </div>
+          </div>
+
+          {/* 更新項目リスト */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {entry.updates.map((u, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <span style={{ color: "#f59e0b", fontSize: 14, marginTop: 1, flexShrink: 0 }}>▸</span>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 14, color: "#e2e8f0" }}>{u.text}</span>
+                  {u.proposer && (
+                    <span style={{
+                      marginLeft: 8, fontSize: 11,
+                      background: "#1e293b", border: "1px solid #334155",
+                      color: "#94a3b8", borderRadius: 6, padding: "1px 8px",
+                      display: "inline-block",
+                    }}>
+                      💡 {u.proposer}さん発案
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function History({ records, onDelete }) {
   const [filterMember, setFilterMember] = useState("");
   const [filterPref, setFilterPref] = useState("");
