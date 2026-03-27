@@ -191,14 +191,17 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   const [showNearestSuggest, setShowNearestSuggest] = useState(false);
   const pendingLineRef = useRef(null);
 
+  // マウント時に自動ロード開始
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 外部から路線を指定された時の処理
   useEffect(() => {
     if (!initialLine) return;
     pendingLineRef.current = initialLine;
     onInitialLineApplied?.();
-    if (loadState === "idle") {
-      load();
-    } else if (loadState === "ready") {
+    if (loadState === "ready") {
       setSelectedLine(initialLine);
       pendingLineRef.current = null;
     }
@@ -351,31 +354,7 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
   // レンダリング
   // ============================================================
 
-  if (loadState === "idle") {
-    return (
-      <div style={{ padding: 32, textAlign: "center" }}>
-        <div style={{ fontSize: 52, marginBottom: 16 }}>🚉</div>
-        <div style={{ color: "#f1f5f9", fontSize: 17, fontWeight: 700, marginBottom: 8 }}>
-          路線から探す
-        </div>
-        <div style={{ color: "#94a3b8", fontSize: 13, marginBottom: 10, lineHeight: 1.6 }}>
-          未配布エリアに停まる路線と駅を確認し<br />
-          効率的な配布ルートを計画できます
-        </div>
-        <div style={{ color: "#64748b", fontSize: 11, marginBottom: 28 }}>
-          ※ 路線・駅データ（全国）を取得するため<br />初回読み込みに10〜20秒かかります
-        </div>
-        <button onClick={load} style={{
-          background: "#f59e0b", color: "#1e293b", border: "none",
-          borderRadius: 12, padding: "13px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer",
-        }}>
-          データを読み込む
-        </button>
-      </div>
-    );
-  }
-
-  if (loadState === "loading") {
+  if (loadState === "idle" || loadState === "loading") {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
         <div style={{ fontSize: 36, marginBottom: 14 }}>⏳</div>
