@@ -66,6 +66,112 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 // ============================================================
+// 路線・市区町村データ構築（named export：App.jsx からも呼べる）
+// ============================================================
+export async function buildLineMuniData(municipalities) {
+  const [stationsAll, linesAll, ...geos] = await Promise.all([
+    fetch("https://raw.githubusercontent.com/piuccio/open-data-jp-railway-stations/master/stations.json").then(r => r.json()),
+    fetch("https://raw.githubusercontent.com/piuccio/open-data-jp-railway-lines/master/lines.json").then(r => r.json()),
+    ...Object.values(PREF_GEOJSON_URLS).map(url => fetch(url).then(r => r.json())),
+  ]);
+
+  // 近接県含む駅リスト（最寄り駅検索用）
+  const NEARBY_PREFS = new Set([7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20]);
+  const stationByName = {};
+  for (const group of stationsAll) {
+    if (!NEARBY_PREFS.has(Number(group.prefecture))) continue;
+    for (const s of group.stations) {
+      const name = s.name_kanji || group.name_kanji;
+      if (name && s.lat && s.lon && !stationByName[name]) {
+        stationByName[name] = { name, lat: parseFloat(s.lat), lon: parseFloat(s.lon) };
+      }
+    }
+  }
+
+  // 路線ID → 路線名
+  const lineMap = {};
+  for (const l of linesAll) lineMap[String(l.ekidata_id)] = l.name_kanji;
+
+  // 市区町村ポリゴン（バウンディングボックス付き）
+  const muniGeoms = {};
+  for (const geo of geos) {
+    for (const f of geo.features) {
+      const name = muniName(f.properties);
+      if (!name) continue;
+      if (!muniGeoms[name]) {
+        muniGeoms[name] = { rings: [], minLon: Infinity, maxLon: -Infinity, minLat: Infinity, maxLat: -Infinity };
+      }
+      const g = muniGeoms[name];
+      const addRing = ring => {
+        g.rings.push(ring);
+        for (const [lon, lat] of ring) {
+          if (lon < g.minLon) g.minLon = lon;
+          if (lon > g.maxLon) g.maxLon = lon;
+          if (lat < g.minLat) g.minLat = lat;
+          if (lat > g.maxLat) g.maxLat = lat;
+        }
+      };
+      const geom = f.geometry;
+      if (geom.type === "Polygon") addRing(geom.coordinates[0]);
+      else if (geom.type === "MultiPolygon") geom.coordinates.forEach(p => addRing(p[0]));
+    }
+  }
+
+  const nameToId = {};
+  for (const m of municipalities) nameToId[m.name] = m.id;
+
+  // 駅→市区町村マッチング
+  const rawResult = [];
+  const muniEntries = Object.entries(muniGeoms);
+  for (const group of stationsAll) {
+    if (!TARGET_PREFS.has(Number(group.prefecture))) continue;
+    for (const s of group.stations) {
+      if (!TARGET_PREFS.has(Number(s.prefecture))) continue;
+      const lineName = lineMap[String(s.ekidata_line_id)];
+      if (!lineName) continue;
+      const lon = s.lon, lat = s.lat;
+      if (!lon || !lat) continue;
+      let muni = null;
+      for (const [name, g] of muniEntries) {
+        if (lon < g.minLon || lon > g.maxLon || lat < g.minLat || lat > g.maxLat) continue;
+        for (const ring of g.rings) {
+          if (pip(lon, lat, ring)) { muni = name; break; }
+        }
+        if (muni) break;
+      }
+      if (!muni) continue;
+      const id = nameToId[muni];
+      if (id == null) continue;
+      rawResult.push({
+        station: s.name_kanji || group.name_kanji,
+        line: lineName,
+        lineId: String(s.ekidata_line_id),
+        municipality: muni,
+        lat: parseFloat(s.lat),
+        lon: parseFloat(s.lon),
+      });
+    }
+  }
+
+  // 路線→市区町村マップ & 市区町村→駅リスト
+  const lineMuniMap = {};
+  const muniStationsMap = {};
+  const seen = {};
+  for (const s of rawResult) {
+    if (!lineMuniMap[s.line]) lineMuniMap[s.line] = new Set();
+    lineMuniMap[s.line].add(s.municipality);
+    if (!muniStationsMap[s.municipality]) { muniStationsMap[s.municipality] = []; seen[s.municipality] = new Set(); }
+    const key = `${s.line}|${s.station}`;
+    if (!seen[s.municipality].has(key)) {
+      muniStationsMap[s.municipality].push({ station: s.station, line: s.line });
+      seen[s.municipality].add(key);
+    }
+  }
+
+  return { lineMuniMap, muniStationsMap, allStations: Object.values(stationByName), rawResult };
+}
+
+// ============================================================
 // StationTab コンポーネント
 // ============================================================
 export default function StationTab({ stats, municipalities, onDataLoaded, initialLine, onInitialLineApplied }) {
@@ -103,129 +209,19 @@ export default function StationTab({ stats, municipalities, onDataLoaded, initia
     if (loadState !== "idle") return;
     setLoadState("loading");
 
-    Promise.all([
-      fetch("https://raw.githubusercontent.com/piuccio/open-data-jp-railway-stations/master/stations.json").then(r => r.json()),
-      fetch("https://raw.githubusercontent.com/piuccio/open-data-jp-railway-lines/master/lines.json").then(r => r.json()),
-      ...Object.values(PREF_GEOJSON_URLS).map(url => fetch(url).then(r => r.json())),
-    ]).then(([stationsAll, linesAll, ...geos]) => {
+    buildLineMuniData(municipalities).then(({ lineMuniMap, muniStationsMap, allStations: stations, rawResult }) => {
+      setAllStations(stations);
 
-      // 対象県＋近接県の駅リスト（最寄り駅入力用）
-      // 4県(8-11) + 福島(7)・長野(20)・新潟(15)・山梨(19)・千葉(12)・東京(13)・神奈川(14)
-      const NEARBY_PREFS = new Set([7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20]);
-      const stationByName = {};
-      for (const group of stationsAll) {
-        if (!NEARBY_PREFS.has(Number(group.prefecture))) continue;
-        for (const s of group.stations) {
-          const name = s.name_kanji || group.name_kanji;
-          if (name && s.lat && s.lon && !stationByName[name]) {
-            stationByName[name] = { name, lat: parseFloat(s.lat), lon: parseFloat(s.lon) };
-          }
-        }
-      }
-      setAllStations(Object.values(stationByName));
-
-      // 路線 ID → 路線名
-      const lineMap = {};
-      for (const l of linesAll) lineMap[String(l.ekidata_id)] = l.name_kanji;
-
-      // 市区町村ごとのポリゴン（バウンディングボックス付き）
-      const muniGeoms = {};
-      for (const geo of geos) {
-        for (const f of geo.features) {
-          const name = muniName(f.properties);
-          if (!name) continue;
-          if (!muniGeoms[name]) {
-            muniGeoms[name] = {
-              rings: [],
-              minLon: Infinity, maxLon: -Infinity,
-              minLat: Infinity, maxLat: -Infinity,
-            };
-          }
-          const g = muniGeoms[name];
-          const addRing = ring => {
-            g.rings.push(ring);
-            for (const [lon, lat] of ring) {
-              if (lon < g.minLon) g.minLon = lon;
-              if (lon > g.maxLon) g.maxLon = lon;
-              if (lat < g.minLat) g.minLat = lat;
-              if (lat > g.maxLat) g.maxLat = lat;
-            }
-          };
-          const geom = f.geometry;
-          if (geom.type === "Polygon") {
-            addRing(geom.coordinates[0]);
-          } else if (geom.type === "MultiPolygon") {
-            geom.coordinates.forEach(p => addRing(p[0]));
-          }
-        }
-      }
-
-      // 配布済み市区町村 ID セット
+      // posted フラグを付与（stats は UI 表示用のみ）
       const postedIds = new Set(Object.keys(stats.muniMap).map(Number));
       const nameToId = {};
       for (const m of municipalities) nameToId[m.name] = m.id;
+      const result = rawResult.map(s => ({
+        ...s,
+        posted: postedIds.has(nameToId[s.municipality]),
+      }));
 
-      // 駅データを処理して市区町村と紐付け
-      const result = [];
-      const muniEntries = Object.entries(muniGeoms);
-
-      for (const group of stationsAll) {
-        if (!TARGET_PREFS.has(Number(group.prefecture))) continue;
-        for (const s of group.stations) {
-          if (!TARGET_PREFS.has(Number(s.prefecture))) continue;
-          const lineName = lineMap[String(s.ekidata_line_id)];
-          if (!lineName) continue;
-
-          const lon = s.lon, lat = s.lat;
-          if (!lon || !lat) continue;
-
-          // バウンディングボックスで候補を絞り込んでからポリゴン判定
-          let muni = null;
-          for (const [name, g] of muniEntries) {
-            if (lon < g.minLon || lon > g.maxLon || lat < g.minLat || lat > g.maxLat) continue;
-            for (const ring of g.rings) {
-              if (pip(lon, lat, ring)) { muni = name; break; }
-            }
-            if (muni) break;
-          }
-          if (!muni) continue;
-
-          // マスタデータに存在する市区町村のみ対象
-          const id = nameToId[muni];
-          if (id == null) continue;
-
-          result.push({
-            station: s.name_kanji || group.name_kanji,
-            line: lineName,
-            lineId: String(s.ekidata_line_id),
-            municipality: muni,
-            posted: postedIds.has(id),
-            lat: parseFloat(s.lat),
-            lon: parseFloat(s.lon),
-          });
-        }
-      }
-
-      // 路線 → 市区町村マップ & 市区町村 → 駅リストを親に通知
-      if (onDataLoaded) {
-        const lineMuniMap = {};
-        const muniStationsMap = {};
-        const seen = {};
-        for (const s of result) {
-          // 路線→市区町村
-          if (!lineMuniMap[s.line]) lineMuniMap[s.line] = new Set();
-          lineMuniMap[s.line].add(s.municipality);
-          // 市区町村→駅（重複除去）
-          if (!muniStationsMap[s.municipality]) { muniStationsMap[s.municipality] = []; seen[s.municipality] = new Set(); }
-          const key = `${s.line}|${s.station}`;
-          if (!seen[s.municipality].has(key)) {
-            muniStationsMap[s.municipality].push({ station: s.station, line: s.line });
-            seen[s.municipality].add(key);
-          }
-        }
-        onDataLoaded({ lineMuniMap, muniStationsMap });
-      }
-
+      if (onDataLoaded) onDataLoaded({ lineMuniMap, muniStationsMap });
       setEnriched(result);
       setLoadState("ready");
       if (pendingLineRef.current) {
