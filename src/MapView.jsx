@@ -655,14 +655,23 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 {muniPopup.households > 0 && (() => {
                   const flyers = muniFlyers[muniPopup.name];
                   const hh = muniPopup.households;
-                  const nextThreshold = [0.5, 1.0, 1.5, 2.0].find(t => flyers / hh * 100 < t);
+                  const currentPct = flyers / hh * 100;
+                  const nextThreshold = [0.5, 1.0, 1.5, 2.0].find(t => currentPct < t);
                   if (!nextThreshold) return (
                     <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 3 }}>🏆 2%以上達成！</div>
                   );
-                  const needed = Math.ceil(nextThreshold / 100 * hh) - flyers;
+                  const neededNext = Math.ceil(nextThreshold / 100 * hh) - flyers;
+                  const needed2pct = Math.ceil(2.0 / 100 * hh) - flyers;
                   return (
-                    <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 3 }}>
-                      📈 あと<strong style={{ color: "#fbbf24" }}>{needed.toLocaleString()}</strong>枚で{nextThreshold}%達成！
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 3 }}>
+                      <div style={{ fontSize: 10, color: "#f59e0b" }}>
+                        📈 あと<strong style={{ color: "#fbbf24" }}>{neededNext.toLocaleString()}</strong>枚で{nextThreshold}%達成！
+                      </div>
+                      {nextThreshold < 2.0 && (
+                        <div style={{ fontSize: 10, color: "#64748b" }}>
+                          　あと<strong style={{ color: "#94a3b8" }}>{needed2pct.toLocaleString()}</strong>枚で2%達成
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
