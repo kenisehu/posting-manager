@@ -453,7 +453,7 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
 // ============================================================
 // MapView メイン
 // ============================================================
-export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations, muniDanchi, muniFlyers }) {
+export default function MapView({ postedMunicipalityIds, municipalitiesData, expandedPref, setExpandedPref, muniStations, muniDanchi, muniFlyers, declarations }) {
   const [geoData, setGeoData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -465,6 +465,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
       pref: f.pref,
       isPosted: f.isPosted,
       households: f.muniMatch?.households,
+      muniId: f.muniMatch?.id,
       clientX: e.clientX,
       clientY: e.clientY,
     });
@@ -700,6 +701,22 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                         🏢 {name}
                         <span style={{ fontSize: 10, color: "#475569", marginLeft: 6 }}>地図 ›</span>
                       </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const declsHere = (declarations || []).filter(d => d.muniId === muniPopup.muniId && !d.achieved);
+              if (declsHere.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: "#a78bfa", fontWeight: 600, marginBottom: 5 }}>🤝 宣言中</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    {declsHere.map(d => (
+                      <div key={d.id} style={{ fontSize: 11, color: "#94a3b8" }}>
+                        <strong style={{ color: "#f59e0b" }}>{d.memberName}</strong>さんが宣言中（〜{d.deadline.slice(5).replace("-", "/")}）
+                      </div>
                     ))}
                   </div>
                 </div>

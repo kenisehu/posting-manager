@@ -372,6 +372,10 @@ const BADGE_DEFS = [
   { id: "days_7",  category: "活動日数", catIcon: "📅", rank: 3, icon: "💪", label: "週間戦士",   desc: "7日間活動",  color: "#9ca3af", check: s => s.activeDays >= 7 },
   { id: "days_14", category: "活動日数", catIcon: "📅", rank: 4, icon: "🏅", label: "ベテラン",   desc: "14日間活動", color: "#f59e0b", check: s => s.activeDays >= 14 },
   { id: "days_25", category: "活動日数", catIcon: "📅", rank: 5, icon: "🦁", label: "レジェンド", desc: "25日間活動", color: "#ec4899", check: s => s.activeDays >= 25 },
+  // 有言実行（3段階）
+  { id: "yakusoku_1", category: "有言実行", catIcon: "🤝", rank: 1, icon: "🤝", label: "有言実行",  desc: "宣言した市区町村を期限内に配布", color: "#10b981", check: s => (s.yakusoku || 0) >= 1 },
+  { id: "yakusoku_3", category: "有言実行", catIcon: "🤝", rank: 2, icon: "💪", label: "約束の戦士", desc: "3回宣言達成",                  color: "#f59e0b", check: s => (s.yakusoku || 0) >= 3 },
+  { id: "yakusoku_5", category: "有言実行", catIcon: "🤝", rank: 3, icon: "🌟", label: "信頼の人",  desc: "5回宣言達成",                  color: "#ec4899", check: s => (s.yakusoku || 0) >= 5 },
 ];
 
 // アカウントの実績からバッジ一覧を返す
@@ -396,6 +400,7 @@ function calcLineBadges(completedLines) {
 export default function PostingApp() {
   const [tab, setTab] = useState("home");
   const [records, setRecords] = useState([]);
+  const [declarations, setDeclarations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mapExpandedPref, setMapExpandedPref] = useState(null);
   const [stationLineMunis, setStationLineMunis] = useState(null);
@@ -405,14 +410,21 @@ export default function PostingApp() {
 
   useEffect(() => {
     fetchRecords();
-    // リアルタイム購読：他のメンバーが入力したら即反映
-    const channel = supabase
+    fetchDeclarations();
+    // リアルタイム購読
+    const ch1 = supabase
       .channel("posting_records_changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "posting_records" }, () => {
         fetchRecords();
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    const ch2 = supabase
+      .channel("declarations_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "declarations" }, () => {
+        fetchDeclarations();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
   }, []);
 
   // 起動時に路線データをバックグラウンド自動取得
@@ -425,6 +437,43 @@ export default function PostingApp() {
       })
       .catch(err => console.error("路線データ自動取得失敗:", err));
   }, []);
+
+  async function fetchDeclarations() {
+    const today = new Date().toISOString().split("T")[0];
+    const { data, error } = await supabase.from("declarations").select("*");
+    if (!error && data) {
+      // 期限切れ未達成は除外、達成済みは常に保持
+      setDeclarations(
+        data
+          .filter(d => d.achieved || d.deadline >= today)
+          .map(d => ({
+            id: d.id,
+            memberName: d.member_name,
+            muniId: d.muni_id,
+            muniName: d.muni_name,
+            deadline: d.deadline,
+            achieved: d.achieved,
+            achievedAt: d.achieved_at,
+            createdAt: d.created_at,
+          }))
+      );
+    }
+  }
+
+  async function addDeclaration(memberName, muniId, muniName, deadline) {
+    await supabase.from("declarations").insert({
+      member_name: memberName,
+      muni_id: muniId,
+      muni_name: muniName,
+      deadline,
+    });
+    showToast("✅ 宣言しました！");
+  }
+
+  async function cancelDeclaration(id) {
+    await supabase.from("declarations").delete().eq("id", id);
+    showToast("🗑️ 宣言を取り消しました", "#ef4444");
+  }
 
   async function fetchRecords() {
     const { data, error } = await supabase
@@ -535,6 +584,12 @@ export default function PostingApp() {
       .sort((a, b) => b[1].size - a[1].size)
       .map(([name, set]) => ({ name, count: set.size }));
 
+    // 有言実行カウント（達成済み宣言数）
+    const yakusokuMap = {};
+    for (const d of declarations.filter(d => d.achieved)) {
+      yakusokuMap[d.memberName] = (yakusokuMap[d.memberName] || 0) + 1;
+    }
+
     // メンバーごとのバッジ計算
     const allMemberNames = [...new Set(records.map(r => r.memberName))];
     const muniIdToName = {};
@@ -547,6 +602,7 @@ export default function PostingApp() {
         conquest: conquestMap[name]?.size || 0,
         pioneer: pioneerCountMap[name] || 0,
         activeDays: activeDaysMap[name]?.size || 0,
+        yakusoku: yakusokuMap[name] || 0,
       };
       const staticBadges = calcBadges(ms);
       let lineBadges = [];
@@ -565,7 +621,7 @@ export default function PostingApp() {
     }
 
     return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking, memberBadges };
-  }, [records, stationLineMunis]);
+  }, [records, stationLineMunis, declarations]);
 
   // トースト通知
   const [toast, setToast] = useState(null); // { message, color }
@@ -582,7 +638,21 @@ export default function PostingApp() {
       flyer_count: record.flyerCount,
       notes: record.notes,
     });
-    showToast("✅ 記録しました！");
+    // 宣言達成チェック：期限内に宣言した市区町村を投函した場合
+    const activeDecl = declarations.find(d =>
+      d.memberName === record.memberName &&
+      d.muniId === record.municipalityId &&
+      !d.achieved &&
+      record.postedDate <= d.deadline
+    );
+    if (activeDecl) {
+      await supabase.from("declarations")
+        .update({ achieved: true, achieved_at: new Date().toISOString() })
+        .eq("id", activeDecl.id);
+      showToast("🎖️ 有言実行バッジ獲得！宣言達成！", "#a855f7");
+    } else {
+      showToast("✅ 記録しました！");
+    }
   }
 
   async function deleteRecord(id) {
@@ -695,10 +765,10 @@ export default function PostingApp() {
           </div>
         ) : (
           <>
-            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} />}
+            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} declarations={declarations} onDeclare={addDeclaration} onCancelDeclaration={cancelDeclaration} />}
             {tab === "ranking" && <Ranking stats={stats} onMemberClick={name => { setMyBadgesInitialName(name); setTab("mybadges"); }} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
-            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} />}
+            {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} declarations={declarations} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
                 <StationTab stats={stats} municipalities={MUNICIPALITIES_DATA} onDataLoaded={({ lineMuniMap, muniStationsMap }) => { setStationLineMunis(lineMuniMap); setMuniStations(muniStationsMap); }} initialLine={stationInitialLine} onInitialLineApplied={() => setStationInitialLine(null)} />
@@ -718,7 +788,7 @@ export default function PostingApp() {
 // ============================================================
 // Home (入力フォーム + ダッシュボード 縦並び)
 // ============================================================
-function Home({ stats, onAdd, records, onPrefClick }) {
+function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onCancelDeclaration }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -727,7 +797,182 @@ function Home({ stats, onAdd, records, onPrefClick }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} allMembers={allMembers} />
+      <ActiveDeclarants declarations={declarations} />
+      <DeclarationSection
+        declarations={declarations}
+        postedMunicipalityIds={postedMunicipalityIds}
+        allMembers={allMembers}
+        onDeclare={onDeclare}
+        onCancel={onCancelDeclaration}
+      />
       <Dashboard stats={stats} onPrefClick={onPrefClick} />
+    </div>
+  );
+}
+
+// ============================================================
+// 宣言中メンバー一覧（コンパクト）
+// ============================================================
+function ActiveDeclarants({ declarations }) {
+  const active = declarations.filter(d => !d.achieved);
+  if (active.length === 0) return null;
+  const byMember = {};
+  for (const d of active) {
+    if (!byMember[d.memberName]) byMember[d.memberName] = [];
+    byMember[d.memberName].push(d);
+  }
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#f8fafc", marginBottom: 10 }}>🙋 宣言中メンバー</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {Object.entries(byMember).map(([name, decls]) => (
+          <div key={name} style={{ background: "#0f172a", borderRadius: 8, padding: "7px 12px", border: "1px solid #334155" }}>
+            <span style={{ fontWeight: 700, color: "#f59e0b", fontSize: 13 }}>{name}</span>
+            <span style={{ color: "#94a3b8", fontSize: 12, marginLeft: 6 }}>
+              {decls.map(d => `${d.muniName}（〜${d.deadline.slice(5).replace("-", "/")}）`).join("・")}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 手を動かす宣言セクション
+// ============================================================
+function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, onDeclare, onCancel }) {
+  const [openPrefs, setOpenPrefs] = useState({});
+  const [formMuniId, setFormMuniId] = useState(null);
+  const [formName, setFormName] = useState("");
+  const [formDeadline, setFormDeadline] = useState("");
+
+  const today = new Date().toISOString().split("T")[0];
+  const activeDecls = declarations.filter(d => !d.achieved);
+
+  // 未配布市区町村のみ
+  const unpostedByPref = useMemo(() => {
+    const result = {};
+    for (const pref of PREFECTURES) {
+      const munis = MUNICIPALITIES_DATA.filter(m => m.prefecture === pref && !postedMunicipalityIds.has(m.id));
+      if (munis.length > 0) result[pref] = munis;
+    }
+    return result;
+  }, [postedMunicipalityIds]);
+
+  function togglePref(pref) {
+    setOpenPrefs(prev => ({ ...prev, [pref]: !prev[pref] }));
+  }
+
+  async function handleDeclare(muniId, muniName) {
+    if (!formName.trim()) return alert("名前を入力してください");
+    if (!formDeadline) return alert("期限を入力してください");
+    await onDeclare(formName.trim(), muniId, muniName, formDeadline);
+    setFormMuniId(null);
+    setFormName("");
+    setFormDeadline("");
+  }
+
+  const totalUnposted = Object.values(unpostedByPref).reduce((s, m) => s + m.length, 0);
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#f8fafc", marginBottom: 4 }}>🙌 手を動かす宣言</div>
+      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+        未配布の市区町村を担当宣言できます。宣言通り期限内に配布するとバッジ獲得！
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {Object.entries(unpostedByPref).map(([pref, munis]) => (
+          <div key={pref} style={{ border: "1px solid #334155", borderRadius: 8, overflow: "hidden" }}>
+            {/* 都道府県ヘッダー */}
+            <button
+              onClick={() => togglePref(pref)}
+              style={{
+                width: "100%", background: openPrefs[pref] ? "#1e3a5f" : "#1e293b",
+                border: "none", color: "#e2e8f0", padding: "10px 14px",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                cursor: "pointer", fontSize: 13, fontWeight: 600,
+              }}
+            >
+              <span>{PREF_COLORS[pref] ? <span style={{ color: PREF_COLORS[pref] }}>●</span> : ""} {pref}</span>
+              <span style={{ color: "#64748b", fontSize: 12 }}>
+                未配布 {munis.length}市区町村　{openPrefs[pref] ? "▲" : "▼"}
+              </span>
+            </button>
+            {/* 市区町村リスト */}
+            {openPrefs[pref] && (
+              <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {munis.map(muni => {
+                  const declsHere = activeDecls.filter(d => d.muniId === muni.id);
+                  const isOpen = formMuniId === muni.id;
+                  return (
+                    <div key={muni.id} style={{ background: "#0f172a", borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{muni.name}</span>
+                        <button
+                          onClick={() => setFormMuniId(isOpen ? null : muni.id)}
+                          style={{
+                            background: "#f59e0b", color: "#1e293b", border: "none",
+                            borderRadius: 6, padding: "4px 10px", fontSize: 12,
+                            fontWeight: 700, cursor: "pointer",
+                          }}
+                        >
+                          {isOpen ? "✕ 閉じる" : "配布します！"}
+                        </button>
+                      </div>
+                      {/* 既存の宣言表示 */}
+                      {declsHere.length > 0 && (
+                        <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                          {declsHere.map(d => (
+                            <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#94a3b8" }}>
+                              <span>🤝 <strong style={{ color: "#f59e0b" }}>{d.memberName}</strong>さんが宣言中（〜{d.deadline.slice(5).replace("-", "/")}）</span>
+                              <button
+                                onClick={() => onCancel(d.id)}
+                                style={{ background: "none", border: "none", color: "#ef4444", fontSize: 10, cursor: "pointer" }}
+                              >取消</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* 宣言フォーム */}
+                      {isOpen && (
+                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <select
+                              value={formName}
+                              onChange={e => setFormName(e.target.value)}
+                              style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 12 }}
+                            >
+                              <option value="">名前を選択</option>
+                              {allMembers.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <input
+                              type="date"
+                              min={today}
+                              value={formDeadline}
+                              onChange={e => setFormDeadline(e.target.value)}
+                              style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 12 }}
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleDeclare(muni.id, muni.name)}
+                            style={{ background: "#10b981", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            🙋 宣言する
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {totalUnposted === 0 && (
+        <div style={{ textAlign: "center", color: "#10b981", fontWeight: 700, padding: 20 }}>🎉 全市区町村に投函済み！</div>
+      )}
     </div>
   );
 }
@@ -1614,7 +1859,7 @@ function InputForm({ onAdd, postedMunicipalityIds, allMembers }) {
 // ============================================================
 // MapTab
 // ============================================================
-function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi }) {
+function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi, declarations }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -1655,6 +1900,7 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi
           muniStations={muniStations}
           muniDanchi={muniDanchi}
           muniFlyers={muniFlyers}
+          declarations={declarations}
         />
       </Suspense>
     </div>
