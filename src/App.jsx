@@ -1011,11 +1011,11 @@ function MuniInfoPanel({ muni, flyers, muniStations, muniDanchi, declarations })
   const activeDecls = (declarations || []).filter(d => d.muniId === muni.id && !d.achieved);
 
   // 路線ごとにグループ化
-  const byLine = {};
-  for (const s of stations) {
-    if (!byLine[s.line]) byLine[s.line] = [];
-    byLine[s.line].push(s);
-  }
+  const byLine = stations.reduce((acc, s) => {
+    if (!acc[s.line]) acc[s.line] = [];
+    acc[s.line].push(s.station);
+    return acc;
+  }, {});
 
   return (
     <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "12px 14px", fontSize: 12 }}>
@@ -1087,9 +1087,9 @@ function MuniInfoPanel({ muni, flyers, muniStations, muniDanchi, declarations })
               <div key={line}>
                 <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, marginBottom: 3 }}>{line}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {stns.map(s => (
-                    <span key={s.name} style={{ background: "#0f172a", borderRadius: 4, padding: "2px 8px", color: "#e2e8f0", fontSize: 11 }}>
-                      {s.name}
+                  {stns.map(name => (
+                    <span key={name} style={{ background: "#0f172a", borderRadius: 4, padding: "2px 8px", color: "#e2e8f0", fontSize: 11 }}>
+                      {name}
                     </span>
                   ))}
                 </div>
