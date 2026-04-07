@@ -769,7 +769,7 @@ export default function PostingApp() {
           <>
             {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} declarations={declarations} onDeclare={addDeclaration} onCancelDeclaration={cancelDeclaration} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} />}
             {tab === "ranking" && <Ranking stats={stats} onMemberClick={name => { setMyBadgesInitialName(name); setTab("mybadges"); }} />}
-            {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
+            {tab === "mybadges" && <MyBadges stats={stats} records={records} declarations={declarations} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} declarations={declarations} />}
             {tab === "station" && (
               <Suspense fallback={<div style={{ textAlign: "center", padding: 60, color: "#475569" }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚉</div><div style={{ fontWeight: 600 }}>読み込み中...</div></div>}>
@@ -1510,7 +1510,7 @@ function RadarChart({ memberStats }) {
   );
 }
 
-function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, onInitialNameApplied }) {
+function MyBadges({ stats, records, declarations, stationLineMunis, onLineClick, initialName, onInitialNameApplied }) {
   const allMembers = useMemo(() => [...new Set(records.map(r => r.memberName))].sort(), [records]);
   const [selectedName, setSelectedName] = useState("");
   const [showSuggest, setShowSuggest] = useState(false);
@@ -1536,6 +1536,7 @@ function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, 
     const conquest = conqueredIds.size;
     const activeDays = new Set(myRecords.map(r => r.postedDate)).size;
     const pioneer = stats.pioneerRanking.find(p => p.name === name)?.count || 0;
+    const yakusoku = (declarations || []).filter(d => d.memberName === name && d.achieved).length;
 
     // 路線制覇チェック
     let completedLines = new Set();
@@ -1550,8 +1551,8 @@ function MyBadges({ stats, records, stationLineMunis, onLineClick, initialName, 
       );
     }
 
-    return { totalFlyers, conquest, activeDays, pioneer, completedLines };
-  }, [selectedName, records, stats.pioneerRanking, stationLineMunis]);
+    return { totalFlyers, conquest, activeDays, pioneer, yakusoku, completedLines };
+  }, [selectedName, records, stats.pioneerRanking, stationLineMunis, declarations]);
 
   const earnedBadges = memberStats ? calcBadges(memberStats) : [];
   const earnedLineBadges = memberStats ? calcLineBadges(memberStats.completedLines) : [];
