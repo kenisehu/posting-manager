@@ -638,13 +638,15 @@ export default function PostingApp() {
       flyer_count: record.flyerCount,
       notes: record.notes,
     });
-    // 宣言達成チェック：期限内に宣言した市区町村を投函した場合
-    const activeDecl = declarations.find(d =>
-      d.memberName === record.memberName &&
-      d.muniId === record.municipalityId &&
-      !d.achieved &&
-      record.postedDate <= d.deadline
-    );
+    // 宣言達成チェック：DBから直接取得して確認（stale stateを避けるため）
+    const { data: declData } = await supabase
+      .from("declarations")
+      .select("*")
+      .eq("member_name", record.memberName)
+      .eq("muni_id", record.municipalityId)
+      .eq("achieved", false)
+      .gte("deadline", record.postedDate);
+    const activeDecl = (declData || [])[0];
     if (activeDecl) {
       await supabase.from("declarations")
         .update({ achieved: true, achieved_at: new Date().toISOString() })
