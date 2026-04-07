@@ -765,7 +765,7 @@ export default function PostingApp() {
           </div>
         ) : (
           <>
-            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} declarations={declarations} onDeclare={addDeclaration} onCancelDeclaration={cancelDeclaration} />}
+            {tab === "home" && <Home stats={stats} onAdd={addRecord} records={records} onPrefClick={(pref) => { setTab("map"); setMapExpandedPref(pref); }} declarations={declarations} onDeclare={addDeclaration} onCancelDeclaration={cancelDeclaration} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} />}
             {tab === "ranking" && <Ranking stats={stats} onMemberClick={name => { setMyBadgesInitialName(name); setTab("mybadges"); }} />}
             {tab === "mybadges" && <MyBadges stats={stats} records={records} stationLineMunis={stationLineMunis} onLineClick={line => { setTab("station"); setStationInitialLine(line); }} initialName={myBadgesInitialName} onInitialNameApplied={() => setMyBadgesInitialName(null)} />}
             {tab === "map" && <MapTab stats={stats} expandedPref={mapExpandedPref} setExpandedPref={setMapExpandedPref} muniStations={muniStations} muniDanchi={MAMMOTH_DANCHI} declarations={declarations} />}
@@ -788,7 +788,7 @@ export default function PostingApp() {
 // ============================================================
 // Home (入力フォーム + ダッシュボード 縦並び)
 // ============================================================
-function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onCancelDeclaration }) {
+function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onCancelDeclaration, muniStations, muniDanchi }) {
   const postedMunicipalityIds = useMemo(
     () => new Set(Object.keys(stats.muniMap).map(Number)),
     [stats.muniMap]
@@ -804,6 +804,9 @@ function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onC
         allMembers={allMembers}
         onDeclare={onDeclare}
         onCancel={onCancelDeclaration}
+        muniMap={stats.muniMap}
+        muniStations={muniStations}
+        muniDanchi={muniDanchi}
       />
       <Dashboard stats={stats} onPrefClick={onPrefClick} />
     </div>
@@ -841,11 +844,20 @@ function ActiveDeclarants({ declarations }) {
 // ============================================================
 // 手を動かす宣言セクション
 // ============================================================
-function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, onDeclare, onCancel }) {
+function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, onDeclare, onCancel, muniMap, muniStations, muniDanchi }) {
   const [openPrefs, setOpenPrefs] = useState({});
   const [formMuniId, setFormMuniId] = useState(null);
   const [formName, setFormName] = useState("");
   const [formDeadline, setFormDeadline] = useState("");
+
+  // 市区町村ID → 配布済み枚数マップ
+  const muniFlyers = useMemo(() => {
+    const m = {};
+    for (const [idStr, data] of Object.entries(muniMap || {})) {
+      m[Number(idStr)] = data.count;
+    }
+    return m;
+  }, [muniMap]);
 
   const today = new Date().toISOString().split("T")[0];
   const activeDecls = declarations.filter(d => !d.achieved);
@@ -934,9 +946,18 @@ function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, o
                           ))}
                         </div>
                       )}
-                      {/* 宣言フォーム */}
+                      {/* 市区町村情報 + 宣言フォーム */}
                       {isOpen && (
-                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                          {/* 市区町村詳細情報パネル */}
+                          <MuniInfoPanel
+                            muni={muni}
+                            flyers={muniFlyers[muni.id] || 0}
+                            muniStations={muniStations}
+                            muniDanchi={muniDanchi}
+                            declarations={declarations}
+                          />
+                          {/* 宣言フォーム */}
                           <div style={{ display: "flex", gap: 8 }}>
                             <input
                               list={`members-list-${muni.id}`}
@@ -974,6 +995,108 @@ function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, o
       </div>
       {totalUnposted === 0 && (
         <div style={{ textAlign: "center", color: "#10b981", fontWeight: 700, padding: 20 }}>🎉 全市区町村に投函済み！</div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 市区町村情報パネル（宣言ページ用）
+// ============================================================
+function MuniInfoPanel({ muni, flyers, muniStations, muniDanchi, declarations }) {
+  const stations = muniStations?.[muni.name] || [];
+  const danchiList = muniDanchi?.[muni.name] || [];
+  const pct = muni.households > 0 ? (flyers / muni.households * 100) : 0;
+  const isPosted = flyers > 0;
+  const activeDecls = (declarations || []).filter(d => d.muniId === muni.id && !d.achieved);
+
+  // 路線ごとにグループ化
+  const byLine = {};
+  for (const s of stations) {
+    if (!byLine[s.line]) byLine[s.line] = [];
+    byLine[s.line].push(s);
+  }
+
+  return (
+    <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "12px 14px", fontSize: 12 }}>
+      {/* 世帯数・投函状況 */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+        <span style={{ color: isPosted ? "#4ade80" : "#f59e0b", fontWeight: 600 }}>
+          {isPosted ? "✅ 投函済み" : "⬜ 未投函"}
+        </span>
+        {muni.households > 0 && (
+          <span style={{ color: "#64748b" }}>{muni.households.toLocaleString()}世帯</span>
+        )}
+        {isPosted && (
+          <span style={{ color: "#4ade80" }}>
+            📮 {flyers.toLocaleString()}枚（世帯配布率 {pct.toFixed(2)}%）
+          </span>
+        )}
+      </div>
+      {/* あと〇枚表示 */}
+      {isPosted && muni.households > 0 && (() => {
+        const nextThreshold = [0.5, 1.0, 1.5, 2.0].find(t => pct < t);
+        if (!nextThreshold) return (
+          <div style={{ color: "#f59e0b", marginBottom: 8 }}>🏆 2%以上達成！</div>
+        );
+        const neededNext = Math.ceil(nextThreshold / 100 * muni.households) - flyers;
+        const needed2pct = Math.ceil(2.0 / 100 * muni.households) - flyers;
+        return (
+          <div style={{ marginBottom: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ color: "#f59e0b" }}>📈 あと<strong>{neededNext.toLocaleString()}</strong>枚で{nextThreshold}%達成！</div>
+            {nextThreshold < 2.0 && <div style={{ color: "#64748b" }}>　あと<strong>{needed2pct.toLocaleString()}</strong>枚で2%達成</div>}
+          </div>
+        );
+      })()}
+      {/* 宣言中メンバー */}
+      {activeDecls.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ color: "#a78bfa", fontWeight: 600, marginBottom: 4 }}>🤝 宣言中</div>
+          {activeDecls.map(d => (
+            <div key={d.id} style={{ color: "#94a3b8" }}>
+              <strong style={{ color: "#f59e0b" }}>{d.memberName}</strong>さん（〜{d.deadline.slice(5).replace("-", "/")}）
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 団地 */}
+      {danchiList.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ color: "#f59e0b", fontWeight: 600, marginBottom: 4 }}>🏢 マンモス団地</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {danchiList.map(name => (
+              <a key={name} href={`https://www.google.com/maps/search/${encodeURIComponent(name)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ background: "#0f172a", border: "1px solid #f59e0b44", borderRadius: 4, padding: "3px 8px", color: "#fbbf24", textDecoration: "none", fontSize: 11 }}>
+                🏢 {name}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* 駅情報 */}
+      {!muniStations ? (
+        <div style={{ color: "#475569" }}>🚉 路線タブを開くと駅情報が表示されます</div>
+      ) : stations.length === 0 ? (
+        <div style={{ color: "#475569" }}>この市区町村に駅はありません</div>
+      ) : (
+        <div>
+          <div style={{ color: "#94a3b8", marginBottom: 6 }}>🚃 利用できる駅</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {Object.entries(byLine).map(([line, stns]) => (
+              <div key={line}>
+                <div style={{ color: "#64748b", fontSize: 11, fontWeight: 600, marginBottom: 3 }}>{line}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {stns.map(s => (
+                    <span key={s.name} style={{ background: "#0f172a", borderRadius: 4, padding: "2px 8px", color: "#e2e8f0", fontSize: 11 }}>
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
