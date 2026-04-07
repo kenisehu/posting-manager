@@ -138,7 +138,7 @@ function buildFeatures(geoDataMap, municipalitiesData, postedMunicipalityIds, pr
 // ============================================================
 const COMB_W = 900, COMB_H = 620, COMB_PAD = 28;
 
-function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref, onMuniClick, muniFlyers }) {
+function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onClickPref, onMuniClick, muniFlyers, declarations }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredPref, setHoveredPref] = useState(null);
@@ -182,6 +182,12 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
     return map;
   }, [features]);
 
+  const declaredMuniIds = useMemo(() => {
+    const s = new Set();
+    for (const d of (declarations || []).filter(d => !d.achieved)) s.add(d.muniId);
+    return s;
+  }, [declarations]);
+
   return (
     <div style={{ position: "relative", background: "#e8eef5", borderRadius: 10, overflow: "hidden", border: "1px solid #cbd5e1" }}>
       <svg
@@ -198,6 +204,9 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
               <feComposite in="color" in2="ring" operator="in"/>
             </filter>
           ))}
+          <pattern id="decl-stripe-comb" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#a78bfa" strokeWidth="2.5" strokeOpacity="0.7"/>
+          </pattern>
         </defs>
 
         <rect width={COMB_W} height={COMB_H} fill="#e8eef5" />
@@ -210,19 +219,30 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
           const tier = getCoverageTier(muniName, muniFlyers, f.muniMatch?.households);
           const fill = tier === 0 ? (isHov ? "#e8eef5" : "#ffffff") : color;
           const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
+          const isDeclared = declaredMuniIds.has(f.muniMatch?.id);
           return (
-            <path
-              key={i}
-              d={f.d}
-              fill={fill}
-              fillOpacity={fillOp}
-              stroke="#9aacbf"
-              strokeWidth={0.4}
-              style={{ cursor: "pointer" }}
-              onClick={() => onClickPref(f.pref)}
-              onMouseMove={(e) => handleMouseMove(e, f)}
-              onMouseLeave={handleMouseLeave}
-            />
+            <g key={i}>
+              <path
+                d={f.d}
+                fill={fill}
+                fillOpacity={fillOp}
+                stroke="#9aacbf"
+                strokeWidth={0.4}
+                style={{ cursor: "pointer" }}
+                onClick={() => onClickPref(f.pref)}
+                onMouseMove={(e) => handleMouseMove(e, f)}
+                onMouseLeave={handleMouseLeave}
+              />
+              {isDeclared && (
+                <path
+                  d={f.d}
+                  fill="url(#decl-stripe-comb)"
+                  stroke="#a78bfa"
+                  strokeWidth={0.8}
+                  style={{ pointerEvents: "none" }}
+                />
+              )}
+            </g>
           );
         })}
 
@@ -323,7 +343,7 @@ function CombinedMap({ geoData, postedMunicipalityIds, municipalitiesData, onCli
 // ============================================================
 const PREF_W = 700, PREF_H = 520, PREF_PAD = 24;
 
-function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onMuniClick, muniFlyers }) {
+function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onMuniClick, muniFlyers, declarations }) {
   const svgRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -395,6 +415,11 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
           viewBox={`0 0 ${PREF_W} ${PREF_H}`}
           style={{ width: "100%", height: "auto", display: "block" }}
         >
+          <defs>
+            <pattern id="decl-stripe-pref" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#a78bfa" strokeWidth="2.5" strokeOpacity="0.7"/>
+            </pattern>
+          </defs>
           <rect width={PREF_W} height={PREF_H} fill="#e8eef5" />
           {features.map((f, i) => {
             const isHov = hoveredIdx === i;
@@ -404,15 +429,25 @@ function PrefMap({ pref, geojson, postedMunicipalityIds, municipalitiesData, onM
             const fillOp = tier === 0 ? 1 : (isHov ? Math.min(1, COVERAGE_OPACITIES[tier] + 0.15) : COVERAGE_OPACITIES[tier]);
             const strokeColor = tier === 0 ? "#9aacbf" : borderColor;
             const strokeW = tier === 0 ? (isHov ? 1.2 : 0.5) : (isHov ? 2.0 : 0.9);
+            const isDeclared = (declarations || []).some(d => !d.achieved && d.muniId === f.muniMatch?.id);
             return (
-              <path key={i} d={f.d}
-                fill={fill} fillOpacity={fillOp}
-                stroke={strokeColor} strokeWidth={strokeW}
-                style={{ cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
-                onMouseMove={(e) => handleMouseMove(e, f, i)}
-                onMouseLeave={handleMouseLeave}
-              />
+              <g key={i}>
+                <path d={f.d}
+                  fill={fill} fillOpacity={fillOp}
+                  stroke={strokeColor} strokeWidth={strokeW}
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => { e.stopPropagation(); onMuniClick?.(e, f); }}
+                  onMouseMove={(e) => handleMouseMove(e, f, i)}
+                  onMouseLeave={handleMouseLeave}
+                />
+                {isDeclared && (
+                  <path d={f.d}
+                    fill="url(#decl-stripe-pref)"
+                    stroke="#a78bfa" strokeWidth={1.2}
+                    style={{ pointerEvents: "none" }}
+                  />
+                )}
+              </g>
             );
           })}
         </svg>
@@ -534,6 +569,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
         onClickPref={setExpandedPref}
         onMuniClick={handleMuniClick}
         muniFlyers={muniFlyers}
+        declarations={declarations}
       />
 
       {/* 拡大モーダル */}
@@ -598,6 +634,7 @@ export default function MapView({ postedMunicipalityIds, municipalitiesData, exp
                 municipalitiesData={municipalitiesData}
                 onMuniClick={handleMuniClick}
                 muniFlyers={muniFlyers}
+                declarations={declarations}
               />
             </div>
           </div>
