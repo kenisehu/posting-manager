@@ -879,7 +879,7 @@ function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, o
     <div className="card" style={{ padding: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 14, color: "#f8fafc", marginBottom: 4 }}>🙌 手を動かす宣言</div>
       <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-        未配布の市区町村を担当宣言できます。宣言通り期限内に配布するとバッジ獲得！
+        未配布の市区町村を担当宣言できます。宣言した期間までに配布するとバッジ獲得！
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {Object.entries(unpostedByPref).map(([pref, munis]) => (
@@ -938,14 +938,16 @@ function DeclarationSection({ declarations, postedMunicipalityIds, allMembers, o
                       {isOpen && (
                         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ display: "flex", gap: 8 }}>
-                            <select
+                            <input
+                              list={`members-list-${muni.id}`}
                               value={formName}
                               onChange={e => setFormName(e.target.value)}
+                              placeholder="名前（自由入力可）"
                               style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 12 }}
-                            >
-                              <option value="">名前を選択</option>
-                              {allMembers.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
+                            />
+                            <datalist id={`members-list-${muni.id}`}>
+                              {allMembers.map(m => <option key={m} value={m} />)}
+                            </datalist>
                             <input
                               type="date"
                               min={today}
