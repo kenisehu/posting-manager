@@ -738,7 +738,7 @@ export default function PostingApp() {
           { key: "map",      label: "🗾 地図" },
           { key: "station",  label: "🚉 路線" },
           { key: "ranking",  label: "🏆 ランキング" },
-          { key: "mybadges", label: "🎖️ マイバッジ" },
+          { key: "mybadges", label: "🎖️ バッジ" },
           { key: "list",      label: "📋 一覧" },
           { key: "history",   label: "📅 履歴" },
           { key: "changelog", label: "📝 更新履歴" },
@@ -2008,6 +2008,9 @@ function MapTab({ stats, expandedPref, setExpandedPref, muniStations, muniDanchi
           投函済みエリアは都道府県カラーで表示、未投函エリアはグレーで表示されます。県をタップ→拡大、市区町村をタップ→駅情報を確認できます。<br />
           <span style={{ color: "#94a3b8" }}>
             色の濃さは世帯配布率（配布枚数÷世帯数）を示します：薄い色ほど世帯配布率が低く（〜0.5%）、濃いほど高い（2%以上）です。
+          </span><br />
+          <span style={{ color: "#a78bfa" }}>
+            紫の斜線ストライプは「手を動かす宣言」で誰かが担当を宣言中のエリアです。
           </span>
         </div>
       </div>
