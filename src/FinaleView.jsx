@@ -6,14 +6,13 @@ import { useState, useEffect, useMemo, useRef } from "react";
 // ============================================================
 
 const POEM_LINES = [
-  { parts: [{ t: "配った" }, { t: "100", em: true }, { t: "枚。" }] },
+  { parts: [{ t: "あなたが配った" }, { t: "100", em: true }, { t: "枚のチラシ。" }] },
   { parts: [{ t: "60", em: true }, { t: "枚は、そのまま捨てられてしまったかもしれない。" }] },
-  { parts: [{ t: "30", em: true }, { t: "枚は、目に入っただけかもしれない。" }] },
-  { parts: [{ t: "7", em: true }, { t: "枚は、記憶に灯をともしたかもしれない。" }] },
-  { parts: [{ t: "2", em: true }, { t: "枚は、ちゃんと読まれたかもしれない。" }] },
-  { parts: [{ t: "1", em: true }, { t: "枚は、誰かを勇気づけたかもしれない。" }] },
-  { parts: [{ t: "そして最後の" }, { t: "1", em: true }, { t: "枚が——" }], pause: true },
-  { parts: [{ t: "次の1票になっているかもしれない。" }], big: true },
+  { parts: [{ t: "25", em: true }, { t: "枚、一瞬目に入っただけかもしれない。それでもいい。" }] },
+  { parts: [{ t: "10", em: true }, { t: "枚は「こんな政党あるんだ」と思ってもらったかもしれない。" }] },
+  { parts: [{ t: "4", em: true }, { t: "枚は「へー」とちゃんと読んでもらえたかもしれない。" }] },
+  { parts: [{ t: "そして、最後の" }, { t: "1", em: true }, { t: "枚は——" }], pause: true },
+  { parts: [{ t: "次の選挙の1票になるかもしれない。" }], big: true },
 ];
 
 const SLOGAN_MAIN = "微力だけど、無力じゃない。";
@@ -285,7 +284,7 @@ function PoemSection() {
     }}>
       {POEM_LINES.map((line, i) => {
         const delay = i * 1.0;
-        const baseSize = line.big ? "clamp(15px, 4.6vw, 24px)" : "clamp(14px, 3.8vw, 17px)";
+        const baseSize = line.big ? "clamp(14px, 4.2vw, 22px)" : "clamp(14px, 3.8vw, 17px)";
         return (
           <div key={i} style={{
             fontSize: baseSize,
