@@ -1385,6 +1385,14 @@ const BADGE_NEXT_DEFS = [
     unit: "日",
     steps: [1, 3, 7, 14, 25],
   },
+  {
+    category: "有言実行",
+    icon: "🤝",
+    color: "#a855f7",
+    getValue: s => s.yakusoku || 0,
+    unit: "回",
+    steps: [1, 3, 5],
+  },
 ];
 
 // ============================================================
@@ -1395,7 +1403,7 @@ const BADGE_NEXT_DEFS = [
 const RADAR_STEPS = {
   totalFlyers:    [300, 700, 1500, 3000, 6000],
   conquest:       [1, 3, 7, 15, 30],
-  completedLines: [2, 4, 6, 8, 10],
+  yakusoku:       [1, 2, 3, 4, 5],
   activeDays:     [1, 3, 7, 14, 25],
   pioneer:        [1, 3, 5, 10, 20],
 };
@@ -1413,11 +1421,11 @@ function RadarChart({ memberStats }) {
   const cy = SIZE / 2;
   const R = 90;
 
-  const linesCount = memberStats.completedLines?.size || 0;
+  const yakusokuCount = memberStats.yakusoku || 0;
   const axes = [
     { label: "投函枚数",     icon: "📮", rank: getRadarRank(memberStats.totalFlyers, RADAR_STEPS.totalFlyers),    color: "#f59e0b", value: memberStats.totalFlyers,   unit: "枚" },
     { label: "市区町村制覇", icon: "🏙️", rank: getRadarRank(memberStats.conquest,    RADAR_STEPS.conquest),       color: "#3b82f6", value: memberStats.conquest,      unit: "市区町村" },
-    { label: "路線制覇",     icon: "🚃", rank: getRadarRank(linesCount,               RADAR_STEPS.completedLines), color: "#a855f7", value: linesCount,               unit: "路線" },
+    { label: "有言実行",     icon: "🤝", rank: getRadarRank(yakusokuCount,            RADAR_STEPS.yakusoku),       color: "#a855f7", value: yakusokuCount,             unit: "回" },
     { label: "活動日数",     icon: "📅", rank: getRadarRank(memberStats.activeDays,   RADAR_STEPS.activeDays),     color: "#ec4899", value: memberStats.activeDays,    unit: "日" },
     { label: "開拓者",       icon: "🏴", rank: getRadarRank(memberStats.pioneer,      RADAR_STEPS.pioneer),        color: "#10b981", value: memberStats.pioneer,       unit: "地域" },
   ];
@@ -1624,7 +1632,7 @@ function MyBadges({ stats, records, declarations, stationLineMunis, onLineClick,
               {[
                 { icon: "📮", label: "投函枚数",     color: "#f59e0b", value: memberStats.totalFlyers,              unit: "枚",      rank: getRadarRank(memberStats.totalFlyers, RADAR_STEPS.totalFlyers) },
                 { icon: "🏙️", label: "市区町村制覇", color: "#3b82f6", value: memberStats.conquest,                 unit: "市区町村", rank: getRadarRank(memberStats.conquest, RADAR_STEPS.conquest) },
-                { icon: "🚃", label: "路線制覇",     color: "#a855f7", value: memberStats.completedLines?.size || 0, unit: "路線",    rank: getRadarRank(memberStats.completedLines?.size || 0, RADAR_STEPS.completedLines) },
+                { icon: "🤝", label: "有言実行",     color: "#a855f7", value: memberStats.yakusoku || 0,            unit: "回",      rank: getRadarRank(memberStats.yakusoku || 0, RADAR_STEPS.yakusoku) },
                 { icon: "📅", label: "活動日数",     color: "#ec4899", value: memberStats.activeDays,               unit: "日",      rank: getRadarRank(memberStats.activeDays, RADAR_STEPS.activeDays) },
                 { icon: "🏴", label: "開拓者",       color: "#10b981", value: memberStats.pioneer,                  unit: "地域",    rank: getRadarRank(memberStats.pioneer, RADAR_STEPS.pioneer) },
               ].map(ax => (
@@ -1704,7 +1712,7 @@ function MyBadges({ stats, records, declarations, stationLineMunis, onLineClick,
                   return !b.check(memberStats) && b.check({ ...memberStats, [Object.keys(memberStats).find(k => cat.getValue({...memberStats, [k]: nextStep}) === nextStep)]: nextStep });
                 });
                 // カテゴリと対応するバッジを直接マッピング
-                const catBadges = BADGE_DEFS.filter(b => b.check({ totalFlyers: cat.category === "投函枚数" ? nextStep : 0, conquest: cat.category === "制覇市区町村数" ? nextStep : 0, pioneer: cat.category === "開拓者回数" ? nextStep : 0, activeDays: cat.category === "活動日数" ? nextStep : 0 }));
+                const catBadges = BADGE_DEFS.filter(b => b.check({ totalFlyers: cat.category === "投函枚数" ? nextStep : 0, conquest: cat.category === "制覇市区町村数" ? nextStep : 0, pioneer: cat.category === "開拓者回数" ? nextStep : 0, activeDays: cat.category === "活動日数" ? nextStep : 0, yakusoku: cat.category === "有言実行" ? nextStep : 0 }));
                 const targetBadge = catBadges[catBadges.length - 1];
                 return (
                   <div key={cat.category}>
@@ -2226,6 +2234,12 @@ function downloadCSV(filename, headers, rows) {
 // ChangeLog（更新履歴）
 // ============================================================
 const CHANGELOG = [
+  {
+    date: "2026-04-10",
+    updates: [
+      { text: "🎉 栃木県100％達成！" },
+    ],
+  },
   {
     date: "2026-04-07",
     updates: [
