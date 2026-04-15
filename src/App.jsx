@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { createClient } from "@supabase/supabase-js";
 const MapView = lazy(() => import("./MapView.jsx"));
 const StationTab = lazy(() => import("./StationTab.jsx"));
+const FinaleView = lazy(() => import("./FinaleView.jsx"));
 
 // ============================================================
 // Supabase 設定
@@ -408,6 +409,19 @@ export default function PostingApp() {
   const [stationInitialLine, setStationInitialLine] = useState(null);
   const [myBadgesInitialName, setMyBadgesInitialName] = useState(null);
 
+  // フィナーレ画面の表示判定
+  // - 2026-05-01 0:00(JST) 以降は全員に自動表示
+  // - それ以前でも ?preview=finale でプレビュー可能
+  const finaleGate = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isPreview = params.get("preview") === "finale";
+    // JST基準で 2026-05-01 00:00:00 = UTC 2026-04-30 15:00:00
+    const releaseAt = new Date("2026-04-30T15:00:00Z");
+    const isReleased = new Date() >= releaseAt;
+    return { show: isPreview || isReleased, isPreview };
+  }, []);
+  const [finaleClosed, setFinaleClosed] = useState(false);
+
   useEffect(() => {
     fetchRecords();
     fetchDeclarations();
@@ -669,6 +683,15 @@ export default function PostingApp() {
       .update({ member_name: toName })
       .eq("member_name", fromName);
     showToast(`✅ 「${fromName}」を「${toName}」に統合しました`);
+  }
+
+  // フィナーレ画面（全画面オーバーレイ）
+  if (finaleGate.show && !finaleClosed) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#050814", color: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>読み込み中...</div>}>
+        <FinaleView records={records} isPreview={finaleGate.isPreview} onExit={finaleGate.isPreview ? () => setFinaleClosed(true) : null} />
+      </Suspense>
+    );
   }
 
   return (
