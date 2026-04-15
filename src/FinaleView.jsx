@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 
 const POEM_LINES = [
   { parts: [{ t: "配った" }, { t: "100", em: true }, { t: "枚。" }] },
-  { parts: [{ t: "60", em: true }, { t: "枚は、捨てられたかもしれない。" }] },
+  { parts: [{ t: "60", em: true }, { t: "枚は、そのまま捨てられてしまったかもしれない。" }] },
   { parts: [{ t: "30", em: true }, { t: "枚は、目に入っただけかもしれない。" }] },
   { parts: [{ t: "7", em: true }, { t: "枚は、記憶に灯をともしたかもしれない。" }] },
   { parts: [{ t: "2", em: true }, { t: "枚は、ちゃんと読まれたかもしれない。" }] },
@@ -52,6 +52,7 @@ export default function FinaleView({ records, onExit, isPreview }) {
   const totalFlyers = memberData.reduce((s, m) => s + m.flyers, 0);
   const totalMembers = memberData.length;
   const totalMunis = new Set(records.map(r => r.municipalityId)).size;
+  const totalPersonDays = memberData.reduce((s, m) => s + m.days, 0);
 
   // BGM（Web Audio APIで生成するアンビエントパッド）
   const audioCtxRef = useRef(null);
@@ -179,7 +180,7 @@ export default function FinaleView({ records, onExit, isPreview }) {
 
       <div style={{ position: "relative", zIndex: 10, padding: isPreview ? "70px 20px 80px" : "40px 20px 80px", maxWidth: 900, margin: "0 auto" }}>
         <PoemSection />
-        <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} />
+        <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} totalPersonDays={totalPersonDays} />
         <Slogan />
         <MemberSection displayStyle={displayStyle} memberData={memberData} totalFlyers={totalFlyers} />
         <Footer />
@@ -284,7 +285,7 @@ function PoemSection() {
     }}>
       {POEM_LINES.map((line, i) => {
         const delay = i * 1.0;
-        const baseSize = line.big ? "clamp(20px, 5.5vw, 26px)" : "clamp(14px, 3.8vw, 17px)";
+        const baseSize = line.big ? "clamp(15px, 4.6vw, 24px)" : "clamp(14px, 3.8vw, 17px)";
         return (
           <div key={i} style={{
             fontSize: baseSize,
@@ -295,8 +296,9 @@ function PoemSection() {
             animation: `fadeInUp 1.4s cubic-bezier(0.16,1,0.3,1) ${delay}s forwards`,
             color: line.big ? "#fde68a" : "#e2e8f0",
             textShadow: line.big ? "0 0 24px rgba(253,230,138,0.5)" : "none",
-            letterSpacing: "0.04em",
+            letterSpacing: line.big ? "0.02em" : "0.04em",
             textAlign: line.big ? "center" : "left",
+            whiteSpace: line.big ? "nowrap" : "normal",
           }}>
             {line.parts.map((p, j) => (
               <span key={j} style={p.em ? {
@@ -356,25 +358,30 @@ function Slogan() {
 // ============================================================
 // 統計サマリー（ポエムの後に挟む）
 // ============================================================
-function StatsReveal({ totalFlyers, totalMembers, totalMunis }) {
+function StatsReveal({ totalFlyers, totalMembers, totalMunis, totalPersonDays }) {
   const base = POEM_LINES.length * 1.0 + 0.5;
   const items = [
     { label: "届けた枚数", value: totalFlyers, unit: "枚", color: "#fde68a" },
     { label: "踏みしめた街", value: totalMunis, unit: "市区町村", color: "#a3e635" },
     { label: "歩いた仲間", value: totalMembers, unit: "人", color: "#f472b6" },
+    { label: "延べ活動日数", value: totalPersonDays, unit: "人日", color: "#7dd3fc" },
   ];
   return (
     <div style={{
-      display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap",
-      padding: "30px 0", margin: "20px 0",
+      display: "grid",
+      gridTemplateColumns: "repeat(2, minmax(140px, 1fr))",
+      gap: "18px 16px",
+      maxWidth: 520,
+      margin: "20px auto",
+      padding: "24px 0",
       opacity: 0, animation: `fadeInUp 1.5s ease-out ${base}s forwards`,
     }}>
       {items.map(it => (
-        <div key={it.label} style={{ textAlign: "center", minWidth: 140 }}>
+        <div key={it.label} style={{ textAlign: "center" }}>
           <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>{it.label}</div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: it.color, lineHeight: 1 }}>
+          <div style={{ fontSize: "clamp(26px, 7vw, 34px)", fontWeight: 800, color: it.color, lineHeight: 1 }}>
             <CountUp to={it.value} delay={base * 1000 + 300} />
-            <span style={{ fontSize: 14, color: "#94a3b8", marginLeft: 4 }}>{it.unit}</span>
+            <span style={{ fontSize: "clamp(11px, 3vw, 14px)", color: "#94a3b8", marginLeft: 4 }}>{it.unit}</span>
           </div>
         </div>
       ))}
@@ -501,7 +508,8 @@ function MonumentView({ members }) {
 // ============================================================
 function YosegakiView({ members }) {
   const items = useMemo(() => {
-    const colors = ["#c2410c", "#7c2d12", "#166534", "#1e3a8a", "#581c87", "#831843"];
+    // 和紙になじむ墨・藍・茶系の落ち着いた色合い
+    const colors = ["#2c1810", "#3a2418", "#1e3a5c", "#3a1e2c", "#2d4a20", "#4a2c1a"];
     return members.map((m, i) => ({
       ...m,
       rotate: (Math.random() - 0.5) * 10,
@@ -512,7 +520,7 @@ function YosegakiView({ members }) {
   return (
     <div style={{
       position: "relative",
-      padding: "30px 20px 50px",
+      padding: "30px 20px 40px",
       background: "linear-gradient(135deg, #f5e9d3 0%, #f0dcb4 50%, #e8cf9a 100%)",
       borderRadius: 14,
       boxShadow: "0 10px 40px rgba(0,0,0,0.35), inset 0 0 60px rgba(139,90,43,0.1)",
@@ -526,14 +534,14 @@ function YosegakiView({ members }) {
       }} />
       <div style={{
         textAlign: "center",
-        fontFamily: "'Noto Serif JP', serif",
-        fontSize: 16,
-        color: "#5c3317",
+        fontFamily: "'Klee One', 'Noto Serif JP', serif",
+        fontSize: 18,
+        color: "#2c1810",
         marginBottom: 30,
         fontWeight: 700,
-        letterSpacing: "0.2em",
+        letterSpacing: "0.15em",
       }}>
-        一 ヶ 月 、 お つ か れ さ ま
+        おつかれさまでした
       </div>
       <div style={{
         display: "flex", flexWrap: "wrap", justifyContent: "center",
@@ -559,13 +567,45 @@ function YosegakiView({ members }) {
               fontFamily: "'Klee One', 'Noto Serif JP', serif",
               fontSize: 10,
               color: m.color,
-              opacity: 0.7,
+              opacity: 0.65,
               marginTop: 2,
             }}>
               {m.flyers.toLocaleString()}枚
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Special Thanks */}
+      <div style={{
+        marginTop: 36,
+        paddingTop: 24,
+        borderTop: "1px dashed rgba(92,51,23,0.35)",
+        textAlign: "center",
+        position: "relative",
+      }}>
+        <div style={{
+          fontFamily: "'Klee One', 'Noto Serif JP', serif",
+          fontSize: 12,
+          color: "#5c3317",
+          letterSpacing: "0.35em",
+          marginBottom: 12,
+          paddingLeft: "0.35em",
+          fontWeight: 600,
+        }}>
+          Special Thanks
+        </div>
+        <div style={{
+          fontFamily: "'Klee One', 'Noto Serif JP', serif",
+          fontSize: 13,
+          color: "#3a2418",
+          lineHeight: 1.9,
+          letterSpacing: "0.04em",
+        }}>
+          武藤かず子 様<br />
+          発送等になっていただいた<br />
+          チームみらい運営の皆様
+        </div>
       </div>
     </div>
   );
