@@ -1383,6 +1383,129 @@ function Ranking({ stats, onMemberClick }) {
 }
 
 // ============================================================
+// メンバー別ミニマップ（バッジタブ用）
+// ============================================================
+const MINI_GEOJSON_URLS = {
+  "茨城県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_08_210101.json",
+  "栃木県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_09_210101.json",
+  "群馬県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_10_210101.json",
+  "埼玉県": "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_11_210101.json",
+};
+const MINI_PREF_COLORS = { "埼玉県": "#f59e0b", "栃木県": "#10b981", "茨城県": "#3b82f6", "群馬県": "#ec4899" };
+
+function miniNormalize(name) {
+  if (!name) return "";
+  return name.replace(/\s/g, "").replace("ヶ", "ケ").replace("ヵ", "カ").replace("龍", "竜");
+}
+
+function MemberMiniMap({ conqueredIds }) {
+  const [geoData, setGeoData] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      Object.entries(MINI_GEOJSON_URLS).map(([pref, url]) =>
+        fetch(url).then(r => r.json()).then(json => [pref, json]).catch(() => [pref, null])
+      )
+    ).then(entries => {
+      if (cancelled) return;
+      const map = {};
+      for (const [pref, json] of entries) if (json) map[pref] = json;
+      setGeoData(map);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const conqueredNames = useMemo(() => {
+    return new Set([...conqueredIds].map(id => {
+      const m = MUNICIPALITIES_DATA.find(x => x.id === id);
+      return m ? miniNormalize(m.name) : null;
+    }).filter(Boolean));
+  }, [conqueredIds]);
+
+  const { features, viewBox } = useMemo(() => {
+    const prefs = Object.keys(geoData);
+    if (prefs.length === 0) return { features: [], viewBox: "0 0 320 220" };
+
+    // bounding box
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const geojson of Object.values(geoData)) {
+      for (const f of geojson.features || []) {
+        const coords = f.geometry?.type === "Polygon"
+          ? f.geometry.coordinates.flat()
+          : f.geometry?.type === "MultiPolygon"
+            ? f.geometry.coordinates.flat(2)
+            : [];
+        for (const [lon, lat] of coords) {
+          if (lon < minLon) minLon = lon;
+          if (lon > maxLon) maxLon = lon;
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+        }
+      }
+    }
+
+    const W = 320, H = 220, PAD = 8;
+    const lonR = maxLon - minLon, latR = maxLat - minLat;
+    const scale = Math.min((W - PAD * 2) / lonR, (H - PAD * 2) / latR);
+    const ox = PAD + ((W - PAD * 2) - lonR * scale) / 2;
+    const oy = PAD + ((H - PAD * 2) - latR * scale) / 2;
+    const project = (lon, lat) => [ox + (lon - minLon) * scale, oy + (maxLat - lat) * scale];
+
+    const ringToPath = ring => {
+      const pts = ring.map(([lon, lat]) => { const [x, y] = project(lon, lat); return `${x.toFixed(1)},${y.toFixed(1)}`; });
+      return `M${pts.join("L")}Z`;
+    };
+    const geoToPath = geo => {
+      if (!geo) return "";
+      if (geo.type === "Polygon") return geo.coordinates.map(r => ringToPath(r)).join(" ");
+      if (geo.type === "MultiPolygon") return geo.coordinates.map(p => p.map(r => ringToPath(r)).join(" ")).join(" ");
+      return "";
+    };
+
+    const result = [];
+    for (const [pref, geojson] of Object.entries(geoData)) {
+      for (const f of geojson.features || []) {
+        const props = f.properties || {};
+        const n4 = miniNormalize(props.N03_004 || "");
+        const n3 = miniNormalize(props.N03_003 || "");
+        let muniMatch = n4 ? MUNICIPALITIES_DATA.find(m => m.prefecture === pref && miniNormalize(m.name) === n4) : null;
+        if (!muniMatch && n3) muniMatch = MUNICIPALITIES_DATA.find(m => m.prefecture === pref && miniNormalize(m.name) === n3);
+        const isPosted = muniMatch ? conqueredNames.has(miniNormalize(muniMatch.name)) : false;
+        const d = geoToPath(f.geometry);
+        if (d) result.push({ pref, isPosted, d, name: muniMatch?.name || n4 || n3 });
+      }
+    }
+    return { features: result, viewBox: `0 0 ${W} ${H}` };
+  }, [geoData, conqueredNames]);
+
+  if (loading) return <div style={{ textAlign: "center", color: "#475569", padding: 20, fontSize: 12 }}>地図を読み込み中...</div>;
+
+  const postedCount = new Set(features.filter(f => f.isPosted).map(f => f.name)).size;
+  const totalCount = MUNICIPALITIES_DATA.length;
+
+  return (
+    <div>
+      <svg viewBox={viewBox} style={{ width: "100%", maxWidth: 400, display: "block", margin: "0 auto" }}>
+        {features.map((f, i) => (
+          <path key={i} d={f.d}
+            fill={f.isPosted ? MINI_PREF_COLORS[f.pref] || "#f59e0b" : "#1e293b"}
+            fillOpacity={f.isPosted ? 0.85 : 0.5}
+            stroke={f.isPosted ? "#fff" : "#334155"}
+            strokeWidth={f.isPosted ? 0.6 : 0.3}
+          />
+        ))}
+      </svg>
+      <div style={{ textAlign: "center", fontSize: 11, color: "#64748b", marginTop: 6 }}>
+        <span style={{ color: "#f59e0b", fontWeight: 700 }}>{postedCount}</span> / {totalCount} 市区町村に配布済み
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MyBadges（マイバッジ）
 // ============================================================
 
@@ -1594,7 +1717,7 @@ function MyBadges({ stats, records, declarations, stationLineMunis, onLineClick,
       );
     }
 
-    return { totalFlyers, conquest, activeDays, pioneer, yakusoku, completedLines };
+    return { totalFlyers, conquest, activeDays, pioneer, yakusoku, completedLines, conqueredIds };
   }, [selectedName, records, stats.pioneerRanking, stationLineMunis, declarations]);
 
   const earnedBadges = memberStats ? calcBadges(memberStats) : [];
@@ -1659,6 +1782,12 @@ function MyBadges({ stats, records, declarations, stationLineMunis, onLineClick,
 
       {memberStats && (
         <>
+          {/* メンバー別マップ */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 12 }}>🗺️ 配布エリアマップ</div>
+            <MemberMiniMap conqueredIds={memberStats.conqueredIds} />
+          </div>
+
           {/* レーダーチャート */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc", marginBottom: 16 }}>📊 アクティビティレーダー</div>
