@@ -822,7 +822,7 @@ function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onC
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} allMembers={allMembers} />
-      <ActiveDeclarants declarations={declarations} onCancel={cancelDeclaration} />
+      <ActiveDeclarants declarations={declarations} onCancel={onCancelDeclaration} />
       <DeclarationSection
         declarations={declarations}
         postedMunicipalityIds={postedMunicipalityIds}
