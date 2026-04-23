@@ -767,7 +767,7 @@ export default function PostingApp() {
           { key: "list",      label: "📋 一覧" },
           { key: "history",   label: "📅 履歴" },
           { key: "changelog", label: "📝 更新履歴" },
-          // { key: "settings", label: "⚙️ 設定" }, // 非表示（機能は保持）
+          { key: "settings", label: "⚙️ 設定" },
         ].map(t => (
           <button key={t.key} className="tab-btn" onClick={() => setTab(t.key)}
             style={{
@@ -822,7 +822,7 @@ function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onC
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <InputForm onAdd={onAdd} postedMunicipalityIds={postedMunicipalityIds} allMembers={allMembers} />
-      <ActiveDeclarants declarations={declarations} />
+      <ActiveDeclarants declarations={declarations} onCancel={cancelDeclaration} />
       <DeclarationSection
         declarations={declarations}
         postedMunicipalityIds={postedMunicipalityIds}
@@ -841,7 +841,7 @@ function Home({ stats, onAdd, records, onPrefClick, declarations, onDeclare, onC
 // ============================================================
 // 宣言中メンバー一覧（コンパクト）
 // ============================================================
-function ActiveDeclarants({ declarations }) {
+function ActiveDeclarants({ declarations, onCancel }) {
   const active = declarations.filter(d => !d.achieved);
   if (active.length === 0) return null;
   const byMember = {};
@@ -852,13 +852,25 @@ function ActiveDeclarants({ declarations }) {
   return (
     <div className="card" style={{ padding: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 14, color: "#f8fafc", marginBottom: 10 }}>🙋 宣言中メンバー</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {Object.entries(byMember).map(([name, decls]) => (
-          <div key={name} style={{ background: "#0f172a", borderRadius: 8, padding: "7px 12px", border: "1px solid #334155" }}>
+          <div key={name} style={{ background: "#0f172a", borderRadius: 8, padding: "8px 12px", border: "1px solid #334155" }}>
             <span style={{ fontWeight: 700, color: "#f59e0b", fontSize: 13 }}>{name}</span>
-            <span style={{ color: "#94a3b8", fontSize: 12, marginLeft: 6 }}>
-              {decls.map(d => `${d.muniName}（〜${d.deadline.slice(5).replace("-", "/")}）`).join("・")}
-            </span>
+            <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+              {decls.map(d => (
+                <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#94a3b8", fontSize: 12 }}>
+                    {d.muniName}（〜{d.deadline.slice(5).replace("-", "/")}）
+                  </span>
+                  {onCancel && (
+                    <button
+                      onClick={() => { if (confirm(`「${name}」の「${d.muniName}」宣言を取り消しますか？`)) onCancel(d.id); }}
+                      style={{ background: "none", border: "none", color: "#ef4444", fontSize: 10, cursor: "pointer", padding: "2px 6px", flexShrink: 0 }}
+                    >🗑️ 取消</button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
