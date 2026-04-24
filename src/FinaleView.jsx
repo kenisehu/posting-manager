@@ -9,7 +9,7 @@ const POEM_LINES = [
   { parts: [{ t: "あなたが配った" }, { t: "100", em: true }, { t: "枚のチラシ。" }] },
   { parts: [{ t: "60", em: true }, { t: "枚は、そのまま捨てられてしまったかもしれない。" }] },
   { parts: [{ t: "25", em: true }, { t: "枚、一瞬目に入っただけかもしれない。それでもいい。" }] },
-  { parts: [{ t: "10", em: true }, { t: "枚は「こんな政党あるんだ」と知ってもらったかもしれない。" }] },
+  { parts: [{ t: "10", em: true }, { t: "枚は「こんな政党あるんだ」と知ってもらえたかもしれない。" }] },
   { parts: [{ t: "4", em: true }, { t: "枚は「へー」と少し読んでもらえたかもしれない。" }] },
   { parts: [{ t: "そして、最後の" }, { t: "1", em: true }, { t: "枚は——" }], pause: true },
   { parts: [{ t: "次の選挙の1票になるかもしれない。" }], big: true },
@@ -21,7 +21,7 @@ const SLOGAN_SUB = "未来は明るいと信じられる国へ";
 // ============================================================
 // メイン
 // ============================================================
-export default function FinaleView({ records, onExit, isPreview }) {
+export default function FinaleView({ records, totalMuniCount, onExit, isPreview }) {
   const [started, setStarted] = useState(false);
 
   // メンバー別統計
@@ -83,7 +83,7 @@ export default function FinaleView({ records, onExit, isPreview }) {
 
       <div style={{ position: "relative", zIndex: 10, padding: isPreview ? "70px 20px 80px" : "40px 20px 80px", maxWidth: 900, margin: "0 auto" }}>
         <PoemSection />
-        <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} totalPersonDays={totalPersonDays} />
+        <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} totalMuniCount={totalMuniCount || 0} totalPersonDays={totalPersonDays} />
         <Slogan />
         <MemberSection memberData={memberData} />
         <Footer />
@@ -261,11 +261,11 @@ function Slogan() {
 // ============================================================
 // 統計サマリー（ポエムの後に挟む）
 // ============================================================
-function StatsReveal({ totalFlyers, totalMembers, totalMunis, totalPersonDays }) {
+function StatsReveal({ totalFlyers, totalMembers, totalMunis, totalMuniCount, totalPersonDays }) {
   const base = POEM_LINES.length * 1.0 + 0.5;
   const items = [
-    { label: "届けた枚数", value: totalFlyers, unit: "枚", color: "#fde68a" },
-    { label: "踏みしめた街", value: totalMunis, unit: "市区町村", color: "#a3e635" },
+    { label: "届けた世帯数", value: totalFlyers, unit: "世帯", color: "#fde68a" },
+    { label: "訪れた街", value: totalMunis, unit: `/ ${totalMuniCount} 市区町村`, color: "#a3e635" },
     { label: "歩いた仲間", value: totalMembers, unit: "人", color: "#f472b6" },
     { label: "延べ活動日数", value: totalPersonDays, unit: "人日", color: "#7dd3fc" },
   ];
@@ -493,7 +493,7 @@ function YosegakiView({ members }) {
           lineHeight: 1.9,
           letterSpacing: "0.04em",
         }}>
-          武藤かず子 衆議院議員<br />
+          衆議院議員 武藤かず子様<br />
           発送など担っていただいた<br />
           チームみらい運営の皆様
         </div>
