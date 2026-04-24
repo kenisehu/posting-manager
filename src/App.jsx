@@ -1425,9 +1425,9 @@ function MemberMiniMap({ conqueredIds }) {
     }).filter(Boolean));
   }, [conqueredIds]);
 
-  const { features, viewBox } = useMemo(() => {
+  const { features, prefPaths, viewBox } = useMemo(() => {
     const prefs = Object.keys(geoData);
-    if (prefs.length === 0) return { features: [], viewBox: "0 0 320 220" };
+    if (prefs.length === 0) return { features: [], prefPaths: {}, viewBox: "0 0 320 220" };
 
     // bounding box
     let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
@@ -1466,7 +1466,9 @@ function MemberMiniMap({ conqueredIds }) {
     };
 
     const result = [];
+    const prefPaths = {}; // 県境用：県ごとに全パスを結合
     for (const [pref, geojson] of Object.entries(geoData)) {
+      const paths = [];
       for (const f of geojson.features || []) {
         const props = f.properties || {};
         const n4 = miniNormalize(props.N03_004 || "");
@@ -1475,10 +1477,14 @@ function MemberMiniMap({ conqueredIds }) {
         if (!muniMatch && n3) muniMatch = MUNICIPALITIES_DATA.find(m => m.prefecture === pref && miniNormalize(m.name) === n3);
         const isPosted = muniMatch ? conqueredNames.has(miniNormalize(muniMatch.name)) : false;
         const d = geoToPath(f.geometry);
-        if (d) result.push({ pref, isPosted, d, name: muniMatch?.name || n4 || n3 });
+        if (d) {
+          result.push({ pref, isPosted, d, name: muniMatch?.name || n4 || n3 });
+          paths.push(d);
+        }
       }
+      if (paths.length) prefPaths[pref] = paths.join(" ");
     }
-    return { features: result, viewBox: `0 0 ${W} ${H}` };
+    return { features: result, prefPaths, viewBox: `0 0 ${W} ${H}` };
   }, [geoData, conqueredNames]);
 
   if (loading) return <div style={{ textAlign: "center", color: "#475569", padding: 20, fontSize: 12 }}>地図を読み込み中...</div>;
@@ -1489,12 +1495,23 @@ function MemberMiniMap({ conqueredIds }) {
   return (
     <div>
       <svg viewBox={viewBox} style={{ width: "100%", maxWidth: 400, display: "block", margin: "0 auto" }}>
+        {/* 市区町村の塗り */}
         {features.map((f, i) => (
           <path key={i} d={f.d}
             fill={f.isPosted ? MINI_PREF_COLORS[f.pref] || "#f59e0b" : "#1e293b"}
             fillOpacity={f.isPosted ? 0.85 : 0.5}
             stroke={f.isPosted ? "#fff" : "#334155"}
             strokeWidth={f.isPosted ? 0.6 : 0.3}
+          />
+        ))}
+        {/* 県境ライン */}
+        {Object.entries(prefPaths).map(([pref, d]) => (
+          <path key={`border-${pref}`} d={d}
+            fill="none"
+            stroke="#94a3b8"
+            strokeWidth={1.2}
+            strokeLinejoin="round"
+            pointerEvents="none"
           />
         ))}
       </svg>
