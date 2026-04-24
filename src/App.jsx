@@ -1495,23 +1495,23 @@ function MemberMiniMap({ conqueredIds }) {
   return (
     <div>
       <svg viewBox={viewBox} style={{ width: "100%", maxWidth: 400, display: "block", margin: "0 auto" }}>
-        {/* 市区町村の塗り */}
+        {/* 1. 県境ライン（太く描いてから市区町村塗りで内側を覆い隠す） */}
+        {Object.entries(prefPaths).map(([pref, d]) => (
+          <path key={`border-${pref}`} d={d}
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            pointerEvents="none"
+          />
+        ))}
+        {/* 2. 市区町村の塗り（内側の県境線を覆い隠し、外縁だけ残す） */}
         {features.map((f, i) => (
           <path key={i} d={f.d}
             fill={f.isPosted ? MINI_PREF_COLORS[f.pref] || "#f59e0b" : "#1e293b"}
             fillOpacity={f.isPosted ? 0.85 : 0.5}
             stroke={f.isPosted ? "#fff" : "#334155"}
-            strokeWidth={f.isPosted ? 0.6 : 0.3}
-          />
-        ))}
-        {/* 県境ライン */}
-        {Object.entries(prefPaths).map(([pref, d]) => (
-          <path key={`border-${pref}`} d={d}
-            fill="none"
-            stroke="#94a3b8"
-            strokeWidth={1.2}
-            strokeLinejoin="round"
-            pointerEvents="none"
+            strokeWidth={f.isPosted ? 0.5 : 0.2}
           />
         ))}
       </svg>
