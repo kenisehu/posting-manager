@@ -119,7 +119,7 @@ function StartScreen({ onStart, isPreview }) {
         Thanks, Everyone.
       </div>
       <div style={{ fontSize: 13, color: "#64748b", marginBottom: 30, maxWidth: 400, lineHeight: 1.8 }}>
-        この画面は、みんなでやり切った一ヶ月の記録です。<br />
+        みんなでやり切った記録です。<br />
         ゆっくり読んでいってください。
       </div>
       <button onClick={onStart}
