@@ -1495,23 +1495,33 @@ function MemberMiniMap({ conqueredIds }) {
   return (
     <div>
       <svg viewBox={viewBox} style={{ width: "100%", maxWidth: 400, display: "block", margin: "0 auto" }}>
-        {/* 1. 県境ライン（太く描いてから市区町村塗りで内側を覆い隠す） */}
-        {Object.entries(prefPaths).map(([pref, d]) => (
-          <path key={`border-${pref}`} d={d}
-            fill="none"
-            stroke="#e2e8f0"
-            strokeWidth={2.5}
-            strokeLinejoin="round"
-            pointerEvents="none"
-          />
-        ))}
-        {/* 2. 市区町村の塗り（内側の県境線を覆い隠し、外縁だけ残す） */}
+        <defs>
+          {/* 各県の反転マスク（県の内側を隠し、外側だけストロークを見せる） */}
+          {Object.entries(prefPaths).map(([pref, d]) => (
+            <mask key={`mask-${pref}`} id={`miniMask-${pref.replace("県","")}`}>
+              <rect x="0" y="0" width="320" height="220" fill="white" />
+              <path d={d} fill="black" />
+            </mask>
+          ))}
+        </defs>
+        {/* 1. 市区町村の塗り */}
         {features.map((f, i) => (
           <path key={i} d={f.d}
             fill={f.isPosted ? MINI_PREF_COLORS[f.pref] || "#f59e0b" : "#1e293b"}
             fillOpacity={f.isPosted ? 0.85 : 0.5}
-            stroke={f.isPosted ? "#fff" : "#334155"}
-            strokeWidth={f.isPosted ? 0.5 : 0.2}
+            stroke="#334155"
+            strokeWidth={0.3}
+          />
+        ))}
+        {/* 2. 県境ライン（マスクで県内部を隠し、隣県との境界だけ表示） */}
+        {Object.entries(prefPaths).map(([pref, d]) => (
+          <path key={`border-${pref}`} d={d}
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth={2.4}
+            strokeLinejoin="round"
+            pointerEvents="none"
+            mask={`url(#miniMask-${pref.replace("県","")})`}
           />
         ))}
       </svg>
