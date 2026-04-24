@@ -634,7 +634,22 @@ export default function PostingApp() {
       memberBadges[name] = [...staticBadges, ...lineBadges];
     }
 
-    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking, memberBadges };
+    // 市区町村ランキング
+    const muniRankBase = MUNICIPALITIES_DATA
+      .filter(m => muniMap[m.id])
+      .map(m => ({
+        name: m.name,
+        prefecture: m.prefecture,
+        flyers: muniMap[m.id].count,
+        households: m.households,
+        rate: m.households > 0 ? (muniMap[m.id].count / m.households * 100) : 0,
+        memberCount: muniMap[m.id].members.size,
+      }));
+    const muniByFlyers = [...muniRankBase].sort((a, b) => b.flyers - a.flyers);
+    const muniByRate = [...muniRankBase].sort((a, b) => b.rate - a.rate);
+    const muniByMembers = [...muniRankBase].sort((a, b) => b.memberCount - a.memberCount || b.flyers - a.flyers);
+
+    return { totalMuni, completedMuni, totalHouseholds, totalFlyers, prefStats, memberRanking, muniMap, pioneerRanking, conquestRanking, activeDaysRanking, memberBadges, muniByFlyers, muniByRate, muniByMembers };
   }, [records, stationLineMunis, declarations]);
 
   // トースト通知
@@ -1254,7 +1269,116 @@ const RANK_CONFIGS = [
   },
 ];
 
+const MUNI_RANK_CONFIGS = [
+  {
+    key: "muniFlyers",
+    icon: "📮",
+    title: "投函数の多かった市区町村",
+    subtitle: "投函枚数が多い順",
+    color: "#f59e0b",
+    getValue: m => m.flyers,
+    formatValue: m => `${m.flyers.toLocaleString()}枚`,
+    formatSub: m => `${m.prefecture}・${m.households.toLocaleString()}世帯`,
+  },
+  {
+    key: "muniRate",
+    icon: "📊",
+    title: "投函率の高かった市区町村",
+    subtitle: "世帯数に対する投函枚数の割合",
+    color: "#10b981",
+    getValue: m => m.rate,
+    formatValue: m => `${m.rate.toFixed(2)}%`,
+    formatSub: m => `${m.flyers.toLocaleString()}枚 / ${m.households.toLocaleString()}世帯`,
+  },
+  {
+    key: "muniMembers",
+    icon: "👥",
+    title: "投函人数の多かった市区町村",
+    subtitle: "投函したメンバー数が多い順",
+    color: "#8b5cf6",
+    getValue: m => m.memberCount,
+    formatValue: m => `${m.memberCount}人`,
+    formatSub: m => `${m.prefecture}・${m.flyers.toLocaleString()}枚`,
+  },
+];
+
 const TOP_N = 3;
+
+function MuniRankCard({ config, data }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 22 }}>{config.icon}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
+            <div style={{ fontSize: 11, color: "#64748b" }}>{config.subtitle}</div>
+          </div>
+        </div>
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#475569", fontSize: 13 }}>まだデータがありません</div>
+      </div>
+    );
+  }
+
+  const max = config.getValue(data[0]);
+  const visible = showAll ? data : data.slice(0, TOP_N);
+  const hidden = data.length - TOP_N;
+
+  return (
+    <div className="card" style={{ padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 22 }}>{config.icon}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#f8fafc" }}>{config.title}</div>
+          <div style={{ fontSize: 11, color: "#64748b" }}>{config.subtitle}</div>
+        </div>
+        <div style={{ fontSize: 12, color: "#475569" }}>全{data.length}市区町村</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {visible.map((m, i) => (
+          <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              minWidth: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 900, fontSize: i < 3 ? 14 : 12,
+              background: i === 0 ? config.color : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2e" : "#334155",
+              color: i < 3 ? "#1e293b" : "#64748b",
+            }}>
+              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: "#f8fafc" }}>{m.name}</span>
+                  <span style={{ fontSize: 10, color: "#64748b", marginLeft: 6 }}>{config.formatSub(m)}</span>
+                </div>
+                <span style={{ fontWeight: 700, color: config.color, fontSize: 13, whiteSpace: "nowrap", marginLeft: 6 }}>
+                  {config.formatValue(m)}
+                </span>
+              </div>
+              <div className="progress-bar-bg" style={{ height: 5 }}>
+                <div className="progress-bar-fill" style={{ width: `${(config.getValue(m) / max * 100).toFixed(0)}%`, background: config.color }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {data.length > TOP_N && (
+        <button onClick={() => setShowAll(v => !v)} style={{
+          marginTop: 14, width: "100%", background: "#0f172a", border: "1px solid #334155",
+          borderRadius: 8, padding: "9px 0", color: "#94a3b8", fontSize: 13, fontWeight: 600,
+          cursor: "pointer", transition: "all 0.2s",
+        }}
+          onMouseEnter={e => e.target.style.borderColor = config.color}
+          onMouseLeave={e => e.target.style.borderColor = "#334155"}
+        >
+          {showAll ? "▲ 折りたたむ" : `▼ もっと見る（残り${hidden}市区町村）`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function RankCard({ config, data, memberBadges, onMemberClick }) {
   const [showAll, setShowAll] = useState(false);
@@ -1370,12 +1494,23 @@ function Ranking({ stats, onMemberClick }) {
     conquest: stats.conquestRanking,
     activeDays: stats.activeDaysRanking,
   };
+  const muniRankData = {
+    muniFlyers: stats.muniByFlyers,
+    muniRate: stats.muniByRate,
+    muniMembers: stats.muniByMembers,
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
         {RANK_CONFIGS.map(config => (
           <RankCard key={config.key} config={config} data={rankData[config.key]} memberBadges={stats.memberBadges} onMemberClick={onMemberClick} />
+        ))}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: 16, color: "#f8fafc", marginTop: 8 }}>🏘️ 市区町村ランキング</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+        {MUNI_RANK_CONFIGS.map(config => (
+          <MuniRankCard key={config.key} config={config} data={muniRankData[config.key]} />
         ))}
       </div>
     </div>
