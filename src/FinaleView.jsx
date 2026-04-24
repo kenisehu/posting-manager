@@ -267,7 +267,7 @@ function StatsReveal({ totalFlyers, totalMembers, totalMunis, totalMuniCount, to
     { label: "届けた世帯数", value: totalFlyers, unit: "世帯", color: "#fde68a" },
     { label: "訪れた街", value: totalMunis, unit: `/ ${totalMuniCount} 市区町村`, color: "#a3e635" },
     { label: "歩いた仲間", value: totalMembers, unit: "人", color: "#f472b6" },
-    { label: "延べ活動日数", value: totalPersonDays, unit: "人日", color: "#7dd3fc" },
+    { label: "延べ活動日数", value: totalPersonDays, unit: "日", color: "#7dd3fc" },
   ];
   return (
     <div style={{
