@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // ============================================================
 // FinaleView - ポスティング大会終了後のフィナーレページ
@@ -22,7 +22,6 @@ const SLOGAN_SUB = "未来は明るいと信じられる国へ";
 // メイン
 // ============================================================
 export default function FinaleView({ records, onExit, isPreview }) {
-  const [bgmOn, setBgmOn] = useState(false);
   const [started, setStarted] = useState(false);
 
   // メンバー別統計
@@ -45,56 +44,6 @@ export default function FinaleView({ records, onExit, isPreview }) {
   const totalMembers = memberData.length;
   const totalMunis = new Set(records.map(r => r.municipalityId)).size;
   const totalPersonDays = memberData.reduce((s, m) => s + m.days, 0);
-
-  // BGM（Web Audio APIで生成するアンビエントパッド）
-  const audioCtxRef = useRef(null);
-  const oscNodesRef = useRef([]);
-
-  useEffect(() => {
-    if (!bgmOn) {
-      // 停止
-      if (oscNodesRef.current.length) {
-        const ctx = audioCtxRef.current;
-        oscNodesRef.current.forEach(({ osc, gain }) => {
-          try {
-            gain.gain.cancelScheduledValues(ctx.currentTime);
-            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2);
-            setTimeout(() => { try { osc.stop(); } catch {} }, 1500);
-          } catch {}
-        });
-        oscNodesRef.current = [];
-      }
-      return;
-    }
-    // 再生
-    const ctx = audioCtxRef.current || new (window.AudioContext || window.webkitAudioContext)();
-    audioCtxRef.current = ctx;
-    // ゆったりしたコード（Cmaj9 系）
-    const freqs = [130.81, 196.00, 261.63, 329.63, 392.00, 493.88]; // C3 G3 C4 E4 G4 B4
-    const master = ctx.createGain();
-    master.gain.value = 0;
-    master.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 3);
-    master.connect(ctx.destination);
-    const nodes = freqs.map((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = f;
-      const gain = ctx.createGain();
-      gain.gain.value = 0.4;
-      // LFOでゆらぎ
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = 0.08 + i * 0.02;
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.15;
-      lfo.connect(lfoGain).connect(gain.gain);
-      lfo.start();
-      osc.connect(gain).connect(master);
-      osc.start();
-      return { osc, gain, lfo };
-    });
-    oscNodesRef.current = nodes.map(n => ({ osc: n.osc, gain: master }));
-    return () => {};
-  }, [bgmOn]);
 
   if (!started) {
     return <StartScreen onStart={() => setStarted(true)} isPreview={isPreview} />;
@@ -119,16 +68,6 @@ export default function FinaleView({ records, onExit, isPreview }) {
           <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, marginRight: 8 }}>
             🔒 プレビュー（5/1以降に自動公開）
           </span>
-          <button onClick={() => setBgmOn(v => !v)}
-            style={{
-              padding: "4px 10px", fontSize: 11, fontWeight: 600,
-              background: bgmOn ? "#10b981" : "transparent",
-              color: bgmOn ? "#0f172a" : "#94a3b8",
-              border: `1px solid ${bgmOn ? "#10b981" : "#475569"}`,
-              borderRadius: 6, cursor: "pointer",
-            }}>
-            {bgmOn ? "🔊 BGM ON" : "🔇 BGM OFF"}
-          </button>
           {onExit && (
             <button onClick={onExit}
               style={{
@@ -140,22 +79,6 @@ export default function FinaleView({ records, onExit, isPreview }) {
             </button>
           )}
         </div>
-      )}
-
-      {/* BGMトグル（本番用、右下固定） */}
-      {!isPreview && (
-        <button onClick={() => setBgmOn(v => !v)}
-          style={{
-            position: "fixed", bottom: 20, right: 20, zIndex: 100,
-            padding: "10px 14px", fontSize: 13, fontWeight: 600,
-            background: bgmOn ? "rgba(16,185,129,0.9)" : "rgba(15,23,42,0.85)",
-            color: bgmOn ? "#0f172a" : "#f8fafc",
-            border: `1px solid ${bgmOn ? "#10b981" : "#475569"}`,
-            borderRadius: 999, cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          }}>
-          {bgmOn ? "🔊 BGM ON" : "🔇 BGM OFF"}
-        </button>
       )}
 
       <div style={{ position: "relative", zIndex: 10, padding: isPreview ? "70px 20px 80px" : "40px 20px 80px", maxWidth: 900, margin: "0 auto" }}>
@@ -485,7 +408,7 @@ function YosegakiView({ members }) {
                 opacity: 0.65,
                 marginTop: 2,
               }}>
-                {m.flyers.toLocaleString()}枚
+                {m.flyers.toLocaleString()}枚・{m.munis}市区町村
               </div>
               {/* 個人メッセージ吹き出し */}
               {isOpen && (
@@ -507,7 +430,7 @@ function YosegakiView({ members }) {
                     lineHeight: 1.7,
                   }}>
                     <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 12, color: m.color }}>
-                      {m.name}さんの{m.flyers.toLocaleString()}枚は…
+                      {m.name}さんの{m.flyers.toLocaleString()}枚で…
                     </div>
                     <div>
                       🌱 チームみらいを知ったかもしれない人<br />
@@ -560,8 +483,8 @@ function YosegakiView({ members }) {
           lineHeight: 1.9,
           letterSpacing: "0.04em",
         }}>
-          武藤かず子 様<br />
-          発送等になっていただいた<br />
+          武藤かず子 衆議院議員<br />
+          発送など担っていただいた<br />
           チームみらい運営の皆様
         </div>
       </div>
@@ -580,11 +503,7 @@ function Footer() {
       borderTop: "1px solid rgba(100,116,139,0.2)",
       opacity: 0, animation: `fadeInUp 2s ease-out ${base}s forwards`,
     }}>
-      <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.8 }}>
-        ありがとう。<br />
-        あなたたちが歩いた一歩一歩が、未来を近づけている。
-      </div>
-      <div style={{ fontSize: 11, color: "#475569", marginTop: 20 }}>
+      <div style={{ fontSize: 11, color: "#475569" }}>
         — 北関東ポスティング大会 2026.04 —
       </div>
     </div>
