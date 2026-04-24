@@ -374,6 +374,16 @@ function YosegakiView({ members }) {
         ありがとうございました！
       </div>
       <div style={{
+        textAlign: "center",
+        fontFamily: "'Klee One', 'Noto Serif JP', serif",
+        fontSize: 11,
+        color: "#8b7355",
+        marginBottom: 24,
+        letterSpacing: "0.05em",
+      }}>
+        自分の名前をクリックしてね
+      </div>
+      <div style={{
         display: "flex", flexWrap: "wrap", justifyContent: "center",
         gap: "14px 20px", padding: "0 10px", position: "relative",
       }}>
