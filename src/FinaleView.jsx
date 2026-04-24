@@ -18,17 +18,10 @@ const POEM_LINES = [
 const SLOGAN_MAIN = "微力だけど、無力じゃない。";
 const SLOGAN_SUB = "未来は明るいと信じられる国へ";
 
-const DISPLAY_STYLES = [
-  { key: "monument", label: "🏛️ 碑" },
-  { key: "yosegaki", label: "💌 寄せ書き" },
-  { key: "credits",  label: "🎬 エンドロール" },
-];
-
 // ============================================================
 // メイン
 // ============================================================
 export default function FinaleView({ records, onExit, isPreview }) {
-  const [displayStyle, setDisplayStyle] = useState("monument");
   const [bgmOn, setBgmOn] = useState(false);
   const [started, setStarted] = useState(false);
 
@@ -121,30 +114,18 @@ export default function FinaleView({ records, onExit, isPreview }) {
           position: "fixed", top: 10, left: 10, right: 10, zIndex: 100,
           display: "flex", flexWrap: "wrap", gap: 6, padding: 10,
           background: "rgba(15,23,42,0.85)", border: "1px solid #334155",
-          borderRadius: 10, backdropFilter: "blur(10px)",
+          borderRadius: 10, backdropFilter: "blur(10px)", alignItems: "center",
         }}>
-          <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, alignSelf: "center", marginRight: 8 }}>
+          <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, marginRight: 8 }}>
             🔒 プレビュー（5/1以降に自動公開）
           </span>
-          {DISPLAY_STYLES.map(s => (
-            <button key={s.key} onClick={() => setDisplayStyle(s.key)}
-              style={{
-                padding: "4px 10px", fontSize: 11, fontWeight: 600,
-                background: displayStyle === s.key ? "#f59e0b" : "transparent",
-                color: displayStyle === s.key ? "#0f172a" : "#94a3b8",
-                border: `1px solid ${displayStyle === s.key ? "#f59e0b" : "#475569"}`,
-                borderRadius: 6, cursor: "pointer",
-              }}>
-              {s.label}
-            </button>
-          ))}
           <button onClick={() => setBgmOn(v => !v)}
             style={{
               padding: "4px 10px", fontSize: 11, fontWeight: 600,
               background: bgmOn ? "#10b981" : "transparent",
               color: bgmOn ? "#0f172a" : "#94a3b8",
               border: `1px solid ${bgmOn ? "#10b981" : "#475569"}`,
-              borderRadius: 6, cursor: "pointer", marginLeft: 8,
+              borderRadius: 6, cursor: "pointer",
             }}>
             {bgmOn ? "🔊 BGM ON" : "🔇 BGM OFF"}
           </button>
@@ -181,7 +162,7 @@ export default function FinaleView({ records, onExit, isPreview }) {
         <PoemSection />
         <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} totalPersonDays={totalPersonDays} />
         <Slogan />
-        <MemberSection displayStyle={displayStyle} memberData={memberData} totalFlyers={totalFlyers} />
+        <MemberSection memberData={memberData} />
         <Footer />
       </div>
 
@@ -410,9 +391,9 @@ function CountUp({ to, delay }) {
 }
 
 // ============================================================
-// メンバー表示の切替
+// メンバー表示（寄せ書き固定）
 // ============================================================
-function MemberSection({ displayStyle, memberData, totalFlyers }) {
+function MemberSection({ memberData }) {
   const base = POEM_LINES.length * 1.0 + 6;
   return (
     <div style={{ marginTop: 40, opacity: 0, animation: `fadeInUp 2s ease-out ${base}s forwards` }}>
@@ -423,91 +404,18 @@ function MemberSection({ displayStyle, memberData, totalFlyers }) {
       }}>
         ─ この活動に参加してくれた、すべての人へ ─
       </div>
-      {displayStyle === "monument" && <MonumentView members={memberData} />}
-      {displayStyle === "yosegaki" && <YosegakiView members={memberData} />}
-      {displayStyle === "credits"  && <CreditsView members={memberData} />}
+      <YosegakiView members={memberData} />
     </div>
   );
 }
 
 // ============================================================
-// ① 碑（モニュメント）型
-// ============================================================
-function MonumentView({ members }) {
-  return (
-    <div style={{
-      position: "relative", padding: "40px 20px",
-      background: "linear-gradient(180deg, #0a0a0f 0%, #1a1a24 50%, #0a0a0f 100%)",
-      borderRadius: 12,
-      border: "1px solid #3d3426",
-      boxShadow: "inset 0 2px 20px rgba(0,0,0,0.6), 0 8px 32px rgba(0,0,0,0.5)",
-    }}>
-      {/* 大理石っぽいテクスチャ */}
-      <div style={{
-        position: "absolute", inset: 0, borderRadius: 12, pointerEvents: "none",
-        background: "radial-gradient(ellipse at 20% 10%, rgba(255,255,255,0.02), transparent 40%), radial-gradient(ellipse at 80% 80%, rgba(255,255,255,0.02), transparent 40%)",
-      }} />
-      <div style={{
-        textAlign: "center",
-        fontFamily: "'Noto Serif JP', serif",
-        fontSize: 11, color: "#c9a961", letterSpacing: "0.5em",
-        marginBottom: 6, paddingLeft: "0.5em",
-      }}>
-        — ARIGATO —
-      </div>
-      <div style={{
-        textAlign: "center",
-        fontFamily: "'Noto Serif JP', serif",
-        fontSize: 14, color: "#8b7355", letterSpacing: "0.3em",
-        marginBottom: 32,
-      }}>
-        2026年4月 北関東
-      </div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-        gap: "18px 24px",
-        padding: "0 8px",
-      }}>
-        {members.map((m, i) => (
-          <div key={m.name} style={{
-            textAlign: "center",
-            opacity: 0,
-            animation: `fadeInUp 1.2s ease-out ${0.04 * i}s forwards`,
-          }}>
-            <div style={{
-              fontFamily: "'Noto Serif JP', serif",
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#d4af37",
-              letterSpacing: "0.1em",
-              textShadow: "0 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(212,175,55,0.25)",
-              marginBottom: 4,
-              lineHeight: 1.4,
-            }}>
-              {m.name}
-            </div>
-            <div style={{
-              fontFamily: "'Noto Serif JP', serif",
-              fontSize: 10,
-              color: "#8b7355",
-              letterSpacing: "0.05em",
-            }}>
-              {m.flyers.toLocaleString()}枚・{m.munis}市区町村
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// ② 寄せ書き型
+// 寄せ書き（名前タップで個人メッセージ）
 // ============================================================
 function YosegakiView({ members }) {
+  const [openName, setOpenName] = useState(null);
+
   const items = useMemo(() => {
-    // 和紙になじむ墨・藍・茶系の落ち着いた色合い
     const colors = ["#2c1810", "#3a2418", "#1e3a5c", "#3a1e2c", "#2d4a20", "#4a2c1a"];
     return members.map((m, i) => ({
       ...m,
@@ -540,39 +448,90 @@ function YosegakiView({ members }) {
         fontWeight: 700,
         letterSpacing: "0.15em",
       }}>
-        おつかれさまでした
+        ありがとうございました！
       </div>
       <div style={{
         display: "flex", flexWrap: "wrap", justifyContent: "center",
         gap: "14px 20px", padding: "0 10px", position: "relative",
       }}>
-        {items.map((m, i) => (
-          <div key={m.name} style={{
-            transform: `rotate(${m.rotate}deg)`,
-            textAlign: "center",
-            opacity: 0,
-            animation: `fadeInScale 0.8s cubic-bezier(0.34,1.56,0.64,1) ${0.06 * i}s forwards`,
-          }}>
-            <div style={{
-              fontFamily: "'Klee One', 'Yuji Mai', 'Noto Serif JP', serif",
-              fontSize: 22,
-              fontWeight: 600,
-              color: m.color,
-              lineHeight: 1.2,
-            }}>
-              {m.name}
+        {items.map((m, i) => {
+          const isOpen = openName === m.name;
+          const aware = Math.ceil(m.flyers * 0.1);
+          const voter = Math.ceil(m.flyers * 0.01);
+          return (
+            <div key={m.name} style={{
+              transform: isOpen ? "rotate(0deg)" : `rotate(${m.rotate}deg)`,
+              textAlign: "center",
+              opacity: 0,
+              animation: `fadeInScale 0.8s cubic-bezier(0.34,1.56,0.64,1) ${0.06 * i}s forwards`,
+              cursor: "pointer",
+              transition: "transform 0.3s ease",
+            }}
+              onClick={() => setOpenName(isOpen ? null : m.name)}
+            >
+              <div style={{
+                fontFamily: "'Klee One', 'Yuji Mai', 'Noto Serif JP', serif",
+                fontSize: 22,
+                fontWeight: 600,
+                color: m.color,
+                lineHeight: 1.2,
+              }}>
+                {m.name}
+              </div>
+              <div style={{
+                fontFamily: "'Klee One', 'Noto Serif JP', serif",
+                fontSize: 10,
+                color: m.color,
+                opacity: 0.65,
+                marginTop: 2,
+              }}>
+                {m.flyers.toLocaleString()}枚
+              </div>
+              {/* 個人メッセージ吹き出し */}
+              {isOpen && (
+                <div style={{
+                  marginTop: 8,
+                  padding: "10px 14px",
+                  background: "rgba(255,255,255,0.85)",
+                  borderRadius: 10,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                  transform: `rotate(${-m.rotate}deg)`,
+                  textAlign: "left",
+                  minWidth: 210,
+                  animation: "fadeInScale 0.3s ease-out forwards",
+                }}>
+                  <div style={{
+                    fontFamily: "'Klee One', 'Noto Serif JP', serif",
+                    fontSize: 11,
+                    color: "#2c1810",
+                    lineHeight: 1.7,
+                  }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 12, color: m.color }}>
+                      {m.name}さんの{m.flyers.toLocaleString()}枚は…
+                    </div>
+                    <div>
+                      🌱 チームみらいを知ったかもしれない人<br />
+                      <span style={{ fontWeight: 700, fontSize: 16, color: "#166534" }}>
+                        {aware.toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 10, color: "#5c3317" }}> 人</span>
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      🗳️ 次の選挙で1票を投じてくれるかもしれない人<br />
+                      <span style={{ fontWeight: 700, fontSize: 16, color: "#1e3a5c" }}>
+                        {voter.toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 10, color: "#5c3317" }}> 人</span>
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 10, color: "#8b7355", textAlign: "center", fontStyle: "italic" }}>
+                      その1票が、未来を変えるかもしれない。
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{
-              fontFamily: "'Klee One', 'Noto Serif JP', serif",
-              fontSize: 10,
-              color: m.color,
-              opacity: 0.65,
-              marginTop: 2,
-            }}>
-              {m.flyers.toLocaleString()}枚
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Special Thanks */}
@@ -606,74 +565,6 @@ function YosegakiView({ members }) {
           チームみらい運営の皆様
         </div>
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// ③ エンドロール型（静的 / 美しく組版）
-// ============================================================
-function CreditsView({ members }) {
-  // 投函枚数で3ティアに分ける（貢献度でグルーピングしつつ、名前は目立たせる）
-  const sorted = [...members].sort((a, b) => b.flyers - a.flyers);
-  return (
-    <div style={{
-      padding: "40px 20px",
-      background: "linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.7))",
-      borderRadius: 14,
-      border: "1px solid rgba(253,230,138,0.15)",
-    }}>
-      <div style={{
-        textAlign: "center",
-        fontFamily: "'Oswald', sans-serif",
-        fontSize: 13, color: "#fde68a", letterSpacing: "0.6em",
-        marginBottom: 8, paddingLeft: "0.6em",
-      }}>
-        CAST
-      </div>
-      <div style={{
-        width: 40, height: 1, background: "rgba(253,230,138,0.4)",
-        margin: "0 auto 36px",
-      }} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {sorted.map((m, i) => (
-          <div key={m.name} style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto 1fr",
-            alignItems: "baseline",
-            gap: 20,
-            opacity: 0,
-            animation: `fadeInUp 0.8s ease-out ${0.05 * i}s forwards`,
-          }}>
-            <div style={{
-              fontFamily: "'Noto Serif JP', serif",
-              fontSize: 11,
-              color: "#94a3b8",
-              letterSpacing: "0.15em",
-              textAlign: "right",
-            }}>
-              {m.flyers.toLocaleString()}枚 / {m.munis}市区町村 / {m.days}日
-            </div>
-            <div style={{
-              fontFamily: "'Noto Serif JP', serif",
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#fde68a",
-              letterSpacing: "0.12em",
-              whiteSpace: "nowrap",
-              textShadow: "0 0 16px rgba(253,230,138,0.3)",
-              textAlign: "center",
-            }}>
-              {m.name}
-            </div>
-            <div />
-          </div>
-        ))}
-      </div>
-      <div style={{
-        width: 40, height: 1, background: "rgba(253,230,138,0.4)",
-        margin: "36px auto 8px",
-      }} />
     </div>
   );
 }
