@@ -704,7 +704,7 @@ export default function PostingApp() {
   if (finaleGate.show && !finaleClosed) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#050814", color: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>読み込み中...</div>}>
-        <FinaleView records={records} totalMuniCount={MUNICIPALITIES_DATA.length} isPreview={finaleGate.isPreview} onExit={finaleGate.isPreview ? () => setFinaleClosed(true) : null} />
+        <FinaleView records={records} totalMuniCount={MUNICIPALITIES_DATA.length} isPreview={finaleGate.isPreview} onExit={() => setFinaleClosed(true)} />
       </Suspense>
     );
   }
