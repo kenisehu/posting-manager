@@ -81,6 +81,20 @@ export default function FinaleView({ records, totalMuniCount, onExit, isPreview 
         </div>
       )}
 
+      {/* 通常表示時の閉じるボタン */}
+      {!isPreview && onExit && (
+        <button onClick={onExit}
+          style={{
+            position: "fixed", top: 16, right: 16, zIndex: 100,
+            padding: "8px 18px", fontSize: 13, fontWeight: 700,
+            background: "rgba(15,23,42,0.85)", color: "#e2e8f0",
+            border: "1px solid #475569", borderRadius: 10, cursor: "pointer",
+            backdropFilter: "blur(10px)", letterSpacing: "0.03em",
+          }}>
+          ✕ 通常画面へ
+        </button>
+      )}
+
       <div style={{ position: "relative", zIndex: 10, padding: isPreview ? "70px 20px 80px" : "40px 20px 80px", maxWidth: 900, margin: "0 auto" }}>
         <PoemSection />
         <StatsReveal totalFlyers={totalFlyers} totalMembers={totalMembers} totalMunis={totalMunis} totalMuniCount={totalMuniCount || 0} totalPersonDays={totalPersonDays} />
